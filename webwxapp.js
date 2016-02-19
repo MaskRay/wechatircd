@@ -1,42 +1,46 @@
-console.log('+ meow')
+//@ PATCH
 function MyWebSocket(url) {
-  var ws
-  var eventTarget = document.createElement('div')
-  eventTarget.addEventListener('message', data => this.onmessage(data))
-  var forcedClose = false
-  var dispatch = eventTarget.dispatchEvent.bind(eventTarget)
+    var ws
+    var eventTarget = document.createElement('div')
+    eventTarget.addEventListener('open', data => this.onopen && this.onopen(data))
+    eventTarget.addEventListener('message', data => this.onmessage && this.onmessage(data))
+    var forcedClose = false
+    var dispatch = eventTarget.dispatchEvent.bind(eventTarget)
 
-  function newEvent(s, data) {
-    var e = document.createEvent('CustomEvent')
-    e.initCustomEvent(s, false, false, data)
-    return e
-  }
-
-  this.open = reconnect => {
-    ws = new WebSocket(url)
-    ws.onmessage = event => {
-      dispatch(newEvent('message', event.data))
+    function newEvent(s, data) {
+        var e = document.createEvent('CustomEvent')
+        e.initCustomEvent(s, false, false, data)
+        return e
     }
-    ws.onclose = event => {
-      if (forcedClose)
-        dispatch(newEvent('close', event.data))
-      else
-        setTimeout(() => this.open(), 1000)
+
+    this.open = reconnect => {
+        ws = new WebSocket(url)
+        ws.onopen = event => {
+            dispatch(newEvent('open', event.data))
+        }
+        ws.onmessage = event => {
+            dispatch(newEvent('message', event.data))
+        }
+        ws.onclose = event => {
+            if (forcedClose)
+                dispatch(newEvent('close', event.data))
+            else
+                setTimeout(() => this.open(true), 1000)
+        }
     }
-  }
 
-  this.close = () => {
-    forcedClose = true
-    if (ws)
-      ws.close()
-  }
+    this.close = () => {
+        forcedClose = true
+        if (ws)
+            ws.close()
+    }
 
-  this.send = data => {
-    if (ws)
-      ws.send(JSON.stringify(data))
-  }
+    this.send = data => {
+        if (ws)
+            ws.send(JSON.stringify(data))
+    }
 
-  this.open(false)
+    this.open(false)
 }
 
 var token
@@ -46,25 +50,56 @@ var seenLocalID = new Set()
 var seenUserName = new Map()
 var deliveredUserName = new Map()
 var ws = new MyWebSocket('ws://127.1:9000')
+function wechatircd_reset() {
+    seenLocalID.clear()
+    deliveredUserName.clear()
+}
+var consoleerr = console.error.bind(console)
+
+// 同步通讯录
+setInterval(() => {
+    if (token)
+        // 若token存在则把见过的朋友/群信息投递到服务端
+        try {
+            for (var entry of seenUserName) {
+                // TODO Chrome destructuring
+                var username = entry[0], record = entry[1]
+                if (! deliveredUserName.has(username)) {
+                    ws.send({token: token,
+                            command: username.startsWith('@@') ? 'room' : 'user',
+                            record: record})
+                    deliveredUserName.set(username, record)
+                }
+            }
+        } catch (ex) {
+            consoleerror(ex.stack)
+        }
+}, 5000)
+
+ws.onopen = data => {
+    wechatircd_reset()
+}
+
 ws.onmessage = data => {
-  try {
-    data = JSON.parse(data.detail)
-    switch (data.command) {
-    case 'send_text_message':
-      wechatircd_ToUserName = data.receiver
-      wechatircd_LocalID = data.local_id
-      seenLocalID.add(wechatircd_LocalID)
-      var s = angular.element('#editArea').scope()
-      s.editAreaCtn = data.message.replace('\n', '<br>')
-      s.sendTextMessage()
-      break
+    try {
+        data = JSON.parse(data.detail)
+        switch (data.command) {
+            case 'send_text_message':
+                wechatircd_ToUserName = data.receiver
+            wechatircd_LocalID = data.local_id
+            seenLocalID.add(wechatircd_LocalID)
+            var s = angular.element('#editArea').scope()
+            s.editAreaCtn = data.message.replace('\n', '<br>')
+            s.sendTextMessage()
+            break
+        }
+    } catch (ex) {
+        consoleerror(ex.stack)
+    } finally {
+        wechatircd_ToUserName = null
+        wechatircd_LocalID = null
     }
-  } catch (e) {
-  } finally {
-    wechatircd_ToUserName = null
-    wechatircd_LocalID = null
-  }
-  console.log('+', data)
+    console.log('+', data)
 }
 
 !function() {
@@ -2224,24 +2259,19 @@ angular.module("Services", []),
                         res: e
                     }),
                     msg.MMStatus = confFactory.MSG_SEND_STATUS_FAIL)
+
+                    //@ PATCH
                     try {
-                      if (token) {
-                        //var peer = contactFactory.getContact(msg.MMPeerUserName)
-                        /*if (msg.MMIsChatRoom) {
-                          ws.send({token: token,
-                                  type: 'send',
-                                  room: peer,
-                                  message: msg.MMActualContent})
-                        } else {
-                          ws.send({token: token,
-                                  type: 'send',
-                                  receiver: peer,
-                                  message: msg.MMActualContent})
-                        }*/
-                      }
-                      if (/([a-f0-9]{32})/.test(msg.MMActualContent))
-                        token = RegExp.$1
-                    } catch (ex) {}
+                        if (/([a-f0-9]{32})/.test(msg.MMActualContent)) {
+                            var new_token = RegExp.$1
+                            if (token !== new_token) {
+                                token = new_token
+                                wechatircd_reset()
+                            }
+                        }
+                    } catch (ex) {
+                        consoleerror(ex.stack)
+                    }
                 }).error(function(e) {
                     reportService.report(reportService.ReportType.netError, {
                         text: "postMessage error",
@@ -2249,6 +2279,16 @@ angular.module("Services", []),
                         res: e
                     }),
                     msg.MMStatus = confFactory.MSG_SEND_STATUS_FAIL
+
+                    //@ PATCH
+                    if (wechatircd_LocalID.has(e.LocalID) && token)
+                        try {
+                            ws.send({token: token,
+                                    command: 'send_text_message_fail',
+                                    message: msg.MMActualContent})
+                        } catch (ex) {
+                            consoleerror(ex.stack)
+                        }
                 })
             },
             postTextMessage: function(e) {
@@ -2340,22 +2380,16 @@ angular.module("Services", []),
                     }),
                     t.push(a))
 
+                    //@ PATCH
                     // 记录未见过朋友/群的UserName
-                    if (r.UserName && ! deliveredUserName.has(r.UserName))
-                      seenUserName.set(r.UserName, r)
-                    if (token)
-                      // 若token存在则把见过的朋友/群信息投递到服务端
-                      for (var entry of seenUserName) {
-                        // TODO Chrome destructuring
-                        var username = entry[0], record = entry[1]
-                        try {
-                          ws.send({token: token,
-                                  type: username.startsWith('@@') ? 'room' : 'friend',
-                                  record: r})
-                        } catch (ex) {}
-                        deliveredUserName.set(username, record)
-                        seenUserName.delete(username)
-                      }
+                    try {
+                        if (r.UserName && ! deliveredUserName.has(r.UserName)) {
+                            console.log(r.UserName, r.NickName, r.RemarkName)
+                            seenUserName.set(r.UserName, r)
+                        }
+                    } catch (ex) {
+                        consoleerror(ex.stack)
+                    }
                 }),
                 [].push.apply(_chatListInfos, handleChatList(t)),
                 _chatListInfos
@@ -2494,30 +2528,36 @@ angular.module("Services", []),
                     accountFactory.isSoundOpen() && utilFactory.initMsgNoticePlayer(confFactory.RES_SOUND_RECEIVE_MSG)),
                     t.addChatMessage(e),
                     t.addChatList([e])
+
+                    //@ PATCH
                     if (token)
-                      try {
-                        // 服务端通过WebSocket控制网页版发送消息，无需投递到服务端
-                        if (seenLocalID.has(e.LocalID))
-                          seenLocalID.remove(e.LocalID)
-                        // 非服务端生成
-                        else {
-                          var sender = contactFactory.getContact(e.MMActualSender)
-                          var receiver = contactFactory.getContact(e.MMPeerUserName)
-                          if (e.MMIsChatRoom) {
-                            ws.send({token: token,
-                                    type: e.MMIsSend ? 'send' : 'receive',
-                                    sender: sender,
-                                    room: receiver,
-                                    message: e.MMActualContent})
-                          } else {
-                            ws.send({token: token,
-                                    type: e.MMIsSend ? 'send' : 'receive',
-                                    sender: sender,
-                                    receiver: receiver,
-                                    message: e.MMActualContent})
-                          }
+                        try {
+                            // 服务端通过WebSocket控制网页版发送消息，无需投递到服务端
+                            if (seenLocalID.has(e.LocalID))
+                                seenLocalID.remove(e.LocalID)
+                            // 非服务端生成
+                            else {
+                                var sender = contactFactory.getContact(e.MMActualSender)
+                                var receiver = contactFactory.getContact(e.MMPeerUserName)
+                                if (e.MMIsChatRoom) {
+                                    ws.send({token: token,
+                                            command: 'message',
+                                            type: e.MMIsSend ? 'send' : 'receive',
+                                            sender: sender,
+                                            room: receiver,
+                                            message: e.MMActualContent})
+                                } else {
+                                    ws.send({token: token,
+                                            command: 'message',
+                                            type: e.MMIsSend ? 'send' : 'receive',
+                                            sender: sender,
+                                            receiver: receiver,
+                                            message: e.MMActualContent})
+                                }
+                            }
+                        } catch (ex) {
+                            consoleerror(ex.stack)
                         }
-                      } catch (ex) {}
                 }
             },
             _statusNotifyProcessor: function(e) {
