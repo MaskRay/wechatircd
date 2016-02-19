@@ -1,108 +1,3 @@
-//@ PATCH
-function MyWebSocket(url) {
-    var ws
-    var eventTarget = document.createElement('div')
-    eventTarget.addEventListener('open', data => this.onopen && this.onopen(data))
-    eventTarget.addEventListener('message', data => this.onmessage && this.onmessage(data))
-    var forcedClose = false
-    var dispatch = eventTarget.dispatchEvent.bind(eventTarget)
-
-    function newEvent(s, data) {
-        var e = document.createEvent('CustomEvent')
-        e.initCustomEvent(s, false, false, data)
-        return e
-    }
-
-    this.open = reconnect => {
-        ws = new WebSocket(url)
-        ws.onopen = event => {
-            dispatch(newEvent('open', event.data))
-        }
-        ws.onmessage = event => {
-            dispatch(newEvent('message', event.data))
-        }
-        ws.onclose = event => {
-            if (forcedClose)
-                dispatch(newEvent('close', event.data))
-            else
-                setTimeout(() => this.open(true), 1000)
-        }
-    }
-
-    this.close = () => {
-        forcedClose = true
-        if (ws)
-            ws.close()
-    }
-
-    this.send = data => {
-        if (ws)
-            ws.send(JSON.stringify(data))
-    }
-
-    this.open(false)
-}
-
-var token
-var wechatircd_ToUserName // 服务端通过WebSocket控制网页版发送消息时指定UserName
-var wechatircd_LocalID // 服务端通过WebSocket控制网页版发送消息时指定LocalID，区分网页版上发送的消息(需要投递到服务端)与服务端发送的消息(不需要投递)
-var seenLocalID = new Set()
-var seenUserName = new Map()
-var deliveredUserName = new Map()
-var ws = new MyWebSocket('ws://127.1:9000')
-function wechatircd_reset() {
-    seenLocalID.clear()
-    deliveredUserName.clear()
-}
-var consolelog = console.log.bind(console)
-var consoleerror = console.error.bind(console)
-
-// 同步通讯录
-setInterval(() => {
-    if (token)
-        // 若token存在则把见过的朋友/群信息投递到服务端
-        try {
-            for (var entry of seenUserName) {
-                // TODO Chrome destructuring
-                var username = entry[0], record = entry[1]
-                if (! deliveredUserName.has(username)) {
-                    ws.send({token: token,
-                            command: username.startsWith('@@') ? 'room' : 'user',
-                            record: record})
-                    deliveredUserName.set(username, record)
-                }
-            }
-        } catch (ex) {
-            consoleerror(ex.stack)
-        }
-}, 5000)
-
-ws.onopen = data => {
-    wechatircd_reset()
-}
-
-ws.onmessage = data => {
-    try {
-        data = JSON.parse(data.detail)
-        switch (data.command) {
-            case 'send_text_message':
-                wechatircd_ToUserName = data.receiver
-            wechatircd_LocalID = data.local_id
-            seenLocalID.add(wechatircd_LocalID)
-            var s = angular.element('#editArea').scope()
-            s.editAreaCtn = data.message.replace('\n', '<br>')
-            s.sendTextMessage()
-            break
-        }
-    } catch (ex) {
-        consoleerror(ex.stack)
-    } finally {
-        wechatircd_ToUserName = null
-        wechatircd_LocalID = null
-    }
-    console.log('+', data)
-}
-
 !function() {
     var e, t = function() {}
     , o = ["assert", "clear", "count", "debug", "dir", "dirxml", "error", "exception", "group", "groupCollapsed", "groupEnd", "info", "log", "markTimeline", "profile", "profileEnd", "table", "time", "timeEnd", "timeStamp", "trace", "warn"], n = o.length;
@@ -2188,8 +2083,8 @@ angular.module("Services", []),
             },
             createMessage: function(e) {
                 switch (e.FromUserName || (e.FromUserName = accountFactory.getUserName()),
-                e.ToUserName || (e.ToUserName = wechatircd_ToUserName || this.getCurrentUserName()),
-                e.ClientMsgId = e.LocalID = e.MsgId = wechatircd_LocalID || (utilFactory.now() + Math.random().toFixed(3)).replace(".", ""),
+                e.ToUserName || (e.ToUserName = this.getCurrentUserName()),
+                e.ClientMsgId = e.LocalID = e.MsgId = (utilFactory.now() + Math.random().toFixed(3)).replace(".", ""),
                 e.CreateTime = Math.round(utilFactory.now() / 1e3),
                 e.MMStatus = confFactory.MSG_SEND_STATUS_READY,
                 e.MsgType) {
@@ -2260,19 +2155,6 @@ angular.module("Services", []),
                         res: e
                     }),
                     msg.MMStatus = confFactory.MSG_SEND_STATUS_FAIL)
-
-                    //@ PATCH
-                    try {
-                        if (/([a-f0-9]{32})/.test(msg.MMActualContent)) {
-                            var new_token = RegExp.$1
-                            if (token !== new_token) {
-                                token = new_token
-                                wechatircd_reset()
-                            }
-                        }
-                    } catch (ex) {
-                        consoleerror(ex.stack)
-                    }
                 }).error(function(e) {
                     reportService.report(reportService.ReportType.netError, {
                         text: "postMessage error",
@@ -2280,16 +2162,6 @@ angular.module("Services", []),
                         res: e
                     }),
                     msg.MMStatus = confFactory.MSG_SEND_STATUS_FAIL
-
-                    //@ PATCH
-                    if (wechatircd_LocalID.has(e.LocalID) && token)
-                        try {
-                            ws.send({token: token,
-                                    command: 'send_text_message_fail',
-                                    message: msg.MMActualContent})
-                        } catch (ex) {
-                            consoleerror(ex.stack)
-                        }
                 })
             },
             postTextMessage: function(e) {
@@ -2380,29 +2252,6 @@ angular.module("Services", []),
                         MMDigestTime: n.MMDigestTime || ""
                     }),
                     t.push(a))
-
-                    //@ PATCH
-                    // 记录未见过朋友/群的UserName
-                    try {
-                        var self = accountFactory.getUserInfo()
-                        if (r) {
-                            r.DisplayName = r.RemarkName || r.getDisplayName()
-                            if (! r.isSelf())
-                                if (! deliveredUserName.has(r.UserName) || deliveredUserName.get(r.UserName).DisplayName != r.DisplayName) {
-                                    if (r.MemberList)
-                                        for (var i = r.MemberList.length; i--; ) {
-                                            var x = r.MemberList[i]
-                                            if (x.UserName == self.UserName)
-                                                r.MemberList.splice(i, 1)
-                                            else
-                                                x.DisplayName = x.RemarkName || x.NickName
-                                        }
-                                    seenUserName.set(r.UserName, r)
-                                }
-                        }
-                    } catch (ex) {
-                        consoleerror(ex.stack)
-                    }
                 }),
                 [].push.apply(_chatListInfos, handleChatList(t)),
                 _chatListInfos
@@ -2541,36 +2390,6 @@ angular.module("Services", []),
                     accountFactory.isSoundOpen() && utilFactory.initMsgNoticePlayer(confFactory.RES_SOUND_RECEIVE_MSG)),
                     t.addChatMessage(e),
                     t.addChatList([e])
-
-                    //@ PATCH
-                    if (token)
-                        try {
-                            // 服务端通过WebSocket控制网页版发送消息，无需投递到服务端
-                            if (seenLocalID.has(e.LocalID))
-                                seenLocalID.delete(e.LocalID)
-                            // 非服务端生成
-                            else {
-                                var sender = contactFactory.getContact(e.MMActualSender)
-                                var receiver = contactFactory.getContact(e.MMPeerUserName)
-                                if (e.MMIsChatRoom) {
-                                    ws.send({token: token,
-                                            command: 'message',
-                                            type: e.MMIsSend ? 'send' : 'receive',
-                                            sender: sender,
-                                            room: receiver,
-                                            message: e.MMActualContent})
-                                } else {
-                                    ws.send({token: token,
-                                            command: 'message',
-                                            type: e.MMIsSend ? 'send' : 'receive',
-                                            sender: sender,
-                                            receiver: receiver,
-                                            message: e.MMActualContent})
-                                }
-                            }
-                        } catch (ex) {
-                            consoleerror(ex.stack)
-                        }
                 }
             },
             _statusNotifyProcessor: function(e) {

@@ -112,7 +112,7 @@ def irc_lower(s):
 # loose
 def irc_escape(s):
     s = re.sub(r'<[^>]*>', '', s)
-    return re.sub(r'[^-\w,\.@%\(\)=]', '', s)
+    return re.sub(r'[^-\w$%^*()=./]', '', s)
 
 
 class UnregisteredCommands:
@@ -475,7 +475,7 @@ class WeChatRoom:
         old_name = getattr(self, 'name', None)
         base = '#' + irc_escape(record['DisplayName'])
         if base == '#':
-            base += ','.join(member.nick for member in self.members)[:20]
+            base += '.'.join(member.nick for member in self.members)[:20]
         suffix = ''
         while 1:
             name = base+suffix
@@ -741,6 +741,7 @@ class Client:
 
     def on_wechat_close(self, peername):
         self.wechat_users.clear()
+        self.username2wechat_user.clear()
         for room in self.username2wechat_room.values():
             room.on_event(self, 'PART', room.name)
             self.remove_channel(room.name)
