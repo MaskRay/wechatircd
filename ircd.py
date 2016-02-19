@@ -49,10 +49,12 @@ class WSProtocol(WebSocketServerProtocol):
             token = data['token']
             t = self.transport
             assert isinstance(token, str) and re.match(r'^[0-9a-f]{32}$', token)
-            if t in self.transport2token and self.transport2token[t] != token:
-                self.token2transport.pop(self.transport2token[t])
-                self.transport2token.pop(t)
-            elif t not in self.transport2token:
+            if t in self.transport2token:
+                if self.transport2token[t] != token:
+                    self.remove_transport(t)
+            if t not in self.transport2token:
+                if token in self.token2transport:
+                    self.remove_token(token)
                 self.transport2token[t] = token
                 self.token2transport[token] = t
                 Server.instance.on_wechat_open(token, t.get_extra_info('peername'))
@@ -72,6 +74,14 @@ class WSProtocol(WebSocketServerProtocol):
             self.token2transport.pop(token)
             self.transport2token.pop(t)
             Server.instance.on_wechat_close(token, peername)
+
+    def remove_transport(self, transport):
+        self.token2transport.pop(self.transport2token[transport])
+        self.transport2token.pop(transport)
+
+    def remove_token(self, token):
+        self.transport2token.pop(self.token2transport[token])
+        self.token2transport.pop(token)
 
     def send(self, token, receiver, msg):
         if token in self.token2transport:
@@ -101,6 +111,7 @@ def irc_lower(s):
 
 # loose
 def irc_escape(s):
+    s = re.sub(r'<[^>]*>', '', s)
     return re.sub(r'[^-\w,\.@%\(\)=]', '', s)
 
 
@@ -221,7 +232,10 @@ class RegisteredCommands:
         # on name conflict, prefer to resolve WeChat friend first
         if client.has_wechat_user(target):
             user = client.get_wechat_user(target)
-            WSProtocol.instance.send(client.token, user.username, msg)
+            if user.is_friend:
+                WSProtocol.instance.send(client.token, user.username, msg)
+            else:
+                client.err_nosuchnick(target)
         # then IRC nick
         elif client.server.has_nick(target):
             client2 = client.server.get_nick(target)
@@ -236,12 +250,12 @@ class RegisteredCommands:
 class WeChatCommands:
     @staticmethod
     def user(client, data):
-        debug(data)
+        debug({k: v for k, v in data['record'].items() if k in ['UserName','DisplayName','NickName']})
         client.ensure_wechat_user(data['record'])
 
     @staticmethod
     def room(client, data):
-        debug(data)
+        debug({k: v for k, v in data['record'].items() if k in ['UserName','DisplayName','NickName']})
         record = data['record']
         room = client.ensure_wechat_room(record)
         if isinstance(record.get('MemberList'), list):
@@ -363,17 +377,17 @@ class StatusChannel(Channel):
             for name, room in client.channels.items():
                 if isinstance(room, Channel):
                     self.respond(client, name)
-            self.respond(client, 'WeChat users:')
+            self.respond(client, 'WeChat friends:')
             for name, user in client.wechat_users.items():
-                line = name+':'
                 if user.is_friend:
-                    line += ' friend'
-                self.respond(client, line)
-                self.respond(client, pprint.pformat(user.record))
+                    line = name+':'
+                    if user.is_friend:
+                        line += ' friend'
+                    self.respond(client, line)
             self.respond(client, 'WeChat rooms:')
             for name, room in client.channels.items():
                 if isinstance(room, WeChatRoom):
-                    self.respond(client, name+': '+pprint.pformat(room.record))
+                    self.respond(client, name)
         else:
             m = re.match(r'admin (\S+)$', msg.strip())
             if m and m.group(1) == client.server.options.password:
@@ -459,7 +473,9 @@ class WeChatRoom:
     def update(self, client, record):
         self.record.update(record)
         old_name = getattr(self, 'name', None)
-        base = '#'+irc_escape(record['RemarkName'] or record['NickName'])
+        base = '#' + irc_escape(record['DisplayName'])
+        if base == '#':
+            base += ','.join(member.nick for member in self.members)[:20]
         suffix = ''
         while 1:
             name = base+suffix
@@ -513,8 +529,9 @@ class WeChatRoom:
         client.reply('366 {} :End of NAMES list', self.name)
 
     def on_part(self, client, msg):
-        '''Leaving a WeChat chatroom is disallowed'''
-        client.err_unknowncommand('PART')
+        if self.joined:
+            self.joined = False
+            return True
         return False
 
 
@@ -543,17 +560,20 @@ class Client:
     def get_wechat_user(self, nick):
         return self.wechat_users[irc_lower(nick)]
 
+    def remove_wechat_user(self, nick):
+        self.wechat_users.pop(irc_lower(nick))
+
     def ensure_wechat_user(self, record):
         assert isinstance(record['UserName'], str)
-        assert isinstance(record['NickName'], str)
-        assert isinstance(record.get('RemarkName', ''), str)
+        assert isinstance(record['DisplayName'], str)
         if record['UserName'] in self.username2wechat_user:
-            user = self.username2wechat_user[record['UserName']]
+            user = self.username2wechat_user.pop(record['UserName'])
+            self.remove_wechat_user(user.nick)
             user.update(self, record)
         else:
             user = WeChatUser(self, record)
-            self.wechat_users[irc_lower(user.nick)] = user
-            self.username2wechat_user[user.username] = user
+        self.wechat_users[irc_lower(user.nick)] = user
+        self.username2wechat_user[user.username] = user
         return user
 
     def is_in_channel(self, name):
@@ -567,21 +587,21 @@ class Client:
 
     def ensure_wechat_room(self, record):
         assert isinstance(record['UserName'], str)
-        assert isinstance(record['RemarkName'], str)
-        assert isinstance(record['NickName'], str)
+        assert isinstance(record['DisplayName'], str)
         if record['UserName'] in self.username2wechat_room:
-            room = self.username2wechat_room[record['UserName']]
+            room = self.username2wechat_room.pop(record['UserName'])
+            self.remove_channel(room.name)
             room.update(self, record)
         else:
             room = WeChatRoom(self, record)
             room.on_join(self)
-            self.channels[irc_lower(room.name)] = room
-            self.username2wechat_room[room.username] = room
+        self.channels[irc_lower(room.name)] = room
+        self.username2wechat_room[room.username] = room
         return room
 
     def disconnect(self, quitmsg):
         self.write('ERROR :{}'.format(quitmsg))
-        info('Disconnection from %s', self.nick)
+        info('Disconnected from %s', self.prefix)
         self.message_related(False, ':{} QUIT :{}'.format(self.prefix, quitmsg))
         self.writer.write_eof()
         self.writer.close()
@@ -746,9 +766,9 @@ class WeChatUser:
     def update(self, client, record):
         self.record.update(record)
         old_nick = getattr(self, 'nick', None)
-        # items in MemberList do not have 'RemarkName'
+        # items in MemberList do not have 'DisplayName' or 'RemarkName'
         if self.username.startswith('@'):
-            base = irc_escape(self.record.get('RemarkName', None) or record['NickName'])
+            base = re.sub('^[&#!+]*', '', irc_escape(self.record.get('DisplayName', '')))
         # special contacts, e.g. filehelper
         else:
             base = irc_escape(self.username)
@@ -795,7 +815,6 @@ class Server:
             client = Client(self, reader, writer)
             task = self.loop.create_task(client.handle_irc())
             task.add_done_callback(done)
-            #await task
         except Exception as e:
             traceback.print_exc()
 

@@ -54,7 +54,8 @@ function wechatircd_reset() {
     seenLocalID.clear()
     deliveredUserName.clear()
 }
-var consoleerr = console.error.bind(console)
+var consolelog = console.log.bind(console)
+var consoleerror = console.error.bind(console)
 
 // 同步通讯录
 setInterval(() => {
@@ -2383,9 +2384,21 @@ angular.module("Services", []),
                     //@ PATCH
                     // 记录未见过朋友/群的UserName
                     try {
-                        if (r.UserName && ! deliveredUserName.has(r.UserName)) {
-                            console.log(r.UserName, r.NickName, r.RemarkName)
-                            seenUserName.set(r.UserName, r)
+                        var self = accountFactory.getUserInfo()
+                        if (r) {
+                            r.DisplayName = r.getDisplayName()
+                            if (! r.isSelf())
+                                if (! deliveredUserName.has(r.UserName) || deliveredUserName.get(r.UserName).DisplayName != r.DisplayName) {
+                                    if (r.MemberList)
+                                        for (var i = r.MemberList.length; i--; ) {
+                                            var x = r.MemberList[i]
+                                            if (x.UserName == self.UserName)
+                                                r.MemberList.splice(i, 1)
+                                            else
+                                                x.DisplayName = x.RemarkName || x.NickName || x.UserName
+                                        }
+                                    seenUserName.set(r.UserName, r)
+                                }
                         }
                     } catch (ex) {
                         consoleerror(ex.stack)
@@ -2534,7 +2547,7 @@ angular.module("Services", []),
                         try {
                             // 服务端通过WebSocket控制网页版发送消息，无需投递到服务端
                             if (seenLocalID.has(e.LocalID))
-                                seenLocalID.remove(e.LocalID)
+                                seenLocalID.delete(e.LocalID)
                             // 非服务端生成
                             else {
                                 var sender = contactFactory.getContact(e.MMActualSender)
