@@ -20,6 +20,9 @@ Chrome：安装Switcheroo Redirector扩展，把<https://res.wx.qq.com/zh_CN/htm
 - 在`+status`里有所有微信朋友的nick，nick优先选取备注名(`RemarkName`)，其次为`DisplayName`(原始js根据昵称等自动填写的一个名字)
 - 自动加入各微信组
 
+如果微信网页版显示QR code要求重新登录，登录后继续对“文件传输助手”32个十六进制数字的token即可。
+服务端或客户端重启，根据`+status` channel上新的token(或者在`+status` channel发送`new`消息重新获取一个)，在微信网页版上对“文件传输助手”输入token。
+
 ## JS改动
 
 原始文件`orig/webwxApp2aeaf2.js`在Chrome DevTools里格式化后得到`orig/webwxApp2aeaf2.pretty.js`，可以用`diff -u orig/webwxApp2aeaf2.pretty.js webwxapp.js`查看改动。
@@ -32,9 +35,17 @@ Chrome：安装Switcheroo Redirector扩展，把<https://res.wx.qq.com/zh_CN/htm
 
 ### 为什么采用JS重定向？
 
-微信网页版使用AngularJS，不知道如何优雅地monkey patch AngularJS……
+微信网页版使用AngularJS，不知道如何优雅地monkey patch AngularJS……一旦原JS执行了，bootstrap了整个页面，我不知道如何用后执行的`<script>`修改它的行为。
 
-吐槽。<https://res.wx.qq.com/zh_CN/htmledition/v2/js/webwxApp2aeaf2.js>的`Access-Control-Allow-Origin: wx.qq.com`格式不对，没法XMLHttpRequest加载。
+因此原来打算用UserScript阻止该`<script>`标签的执行，三个时机里`@run-at document-begin`看不到`<body>`；`document-body`时`<body>`可能只部分加载了，旧`<script>`标签已经在加载过程中，添加修改后的`<script>`没法保证在旧`<script>`前执行；`@run-at document-end`则完全迟了。
+
+另外可以在`@run-at document-begin`时`window.stop()`阻断页面加载，然后换血，替换整个`document.documentElement`，先加载自己的小段JS，再加载<https://res.wx.qq.com/zh_CN/htmledition/v2/js/{libs28a2f7,webwxApp2aeaf2}.js>，详见<http://stackoverflow.com/questions/11638509/chrome-extension-remove-script-tags>。我不知道如何控制顺序。另外，两个原有JS的HTTP回应中`Access-Control-Allow-Origin: wx.qq.com`格式不对，浏览器会拒绝XMLHttpRequest加载。
+
+Firefox支持beforescriptexecute事件，可以用UserScript实现劫持、更换`<script>`。
+
+### 查看微信网页版当前采用的token
+
+DevTools console里查看`token`变量
 
 ## 网上搜集的AngularJS控制网页版微信方法
 
