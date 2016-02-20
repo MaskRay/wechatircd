@@ -50,6 +50,9 @@ var seenLocalID = new Set()
 var seenUserName = new Map()
 var deliveredUserName = new Map()
 var ws = new MyWebSocket('wss://127.0.0.1:9000')
+
+var wechatircd = {}
+
 function wechatircd_reset() {
     seenLocalID.clear()
     deliveredUserName.clear()
@@ -85,13 +88,22 @@ ws.onmessage = data => {
     try {
         data = JSON.parse(data.detail)
         switch (data.command) {
-            case 'send_text_message':
-                wechatircd_ToUserName = data.receiver
+        case 'send_text_message':
+            wechatircd_ToUserName = data.receiver
             wechatircd_LocalID = data.local_id
             seenLocalID.add(wechatircd_LocalID)
             var s = angular.element('#editArea').scope()
             s.editAreaCtn = data.message.replace('\n', '<br>')
             s.sendTextMessage()
+            break
+        case 'add_member':
+            wechatircd.chatroomFactory.addMember(data.room, data.user)
+            break
+        case 'del_member':
+            wechatircd.chatroomFactory.delMember(data.room, data.user)
+            break
+        case 'mod_topic':
+            wechatircd.chatroomFactory.modTopic(data.room, data.topic)
             break
         }
     } catch (ex) {
@@ -2386,19 +2398,31 @@ angular.module("Services", []),
                     try {
                         var self = accountFactory.getUserInfo()
                         if (r) {
+                            r = Object.assign({}, r)
                             r.DisplayName = r.RemarkName || r.getDisplayName()
-                            if (! r.isSelf())
-                                if (! deliveredUserName.has(r.UserName) || deliveredUserName.get(r.UserName).DisplayName != r.DisplayName) {
-                                    if (r.MemberList)
-                                        for (var i = r.MemberList.length; i--; ) {
-                                            var x = r.MemberList[i]
-                                            if (x.UserName == self.UserName)
-                                                r.MemberList.splice(i, 1)
-                                            else
-                                                x.DisplayName = x.RemarkName || x.NickName
+                            if (! r.isSelf()) {
+                                if (r.MemberList) {
+                                    var xs = [...r.MemberList], hash = 0
+                                    for (var i = xs.length; i--; ) {
+                                        var x = xs[i]
+                                        if (x.UserName == self.UserName)
+                                            xs.splice(i, 1)
+                                        else {
+                                            // to 32-bit
+                                            hash = (hash*31+x.UserName.charCodeAt(2)*71+x.UserName.charCodeAt(3)) | 0
+                                            x.DisplayName = x.RemarkName || x.NickName
                                         }
-                                    seenUserName.set(r.UserName, r)
+                                    }
+                                    r.Hash = hash
+                                    r.MemberList = xs
                                 }
+                                var old = seenUserName.get(r.UserName)
+                                if (! old || old.DisplayName != r.DisplayName || old.Hash != r.Hash ||
+                                    old.OwnerUin != r.OwnerUin) {
+                                    seenUserName.set(r.UserName, r)
+                                    deliveredUserName.delete(r.UserName)
+                                }
+                            }
                         }
                     } catch (ex) {
                         consoleerror(ex.stack)
@@ -3052,6 +3076,8 @@ angular.module("Services", []),
                 })
             }
         };
+        //@PATCH
+        wechatircd.chatroomFactory = d
         return d
     }
     ])
