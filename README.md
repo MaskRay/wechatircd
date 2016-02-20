@@ -10,15 +10,28 @@
 
 ## 安装
 
-Chrome：安装Switcheroo Redirector扩展，把<https://res.wx.qq.com/zh_CN/htmledition/v2/js/webwxApp2aeaf2.js>重定向至项目根目录下的`webwxapp.js`，要用一个添加`Access-Control-Allow-Origin: *` header的HTTP server伺服，比如：<http://127.1:8000/webwxapp.js>
+Python 3.5或以上，支持`async/await`语法，安装`aiohttp`库。
+
+Chrome：安装Switcheroo Redirector扩展，把<https://res.wx.qq.com/zh_CN/htmledition/v2/js/webwxApp2aeaf2.js>重定向至<https://127.0.0.1:9000/webwxapp.js>，即项目根目录下的`webwxapp.js`。`wechatircd.py`默认监听9000端口，若设置了`--tls-cert CERTIFICATE`和`--tls-key KEY`则会用上HTTPS。
+
+也可用其他程序伺服`webwxapp.js`，但要添加`Access-Control-Allow-Origin: *` header。
+
 
 ## 运行
 
-- `./wechatircd.py`启动WebSocket与IRC server
+TLS:
+
+`./wechatircd.py --tls-cert a.crt --tls-key a.key`启动HTTPS/WebSocket over TLS与IRC server。
+
+无TLS:
+
+- `./wechatircd.py`启动HTTP/WebSocket与IRC server。
+`webwxapp.js`中`var ws = new MyWebSocket('wss://127.0.0.1:9000')`修改成`ws://127.0.0.1:9000`，Chrome会在console给出警告。
+
 - 访问<https://wx.qq.com>，确保其中的<https://res.wx.qq.com/zh_CN/htmledition/v2/js/webwxApp2aeaf2.js>已经重定向到修改版了
-- IRC客户端连接127.1:6667，自动加入了`+status` channel，记录32个十六进制数字的token (UUID Version 1)，在网页版微信里对“文件传输助手”(filehelper)或其他人/群(还是不要骚扰别人吧)发这个token
-- 在`+status`里有所有微信朋友的nick，nick优先选取备注名(`RemarkName`)，其次为`DisplayName`(原始js根据昵称等自动填写的一个名字)
-- 自动加入各微信组
+- IRC客户端连接127.1:6667，会自动加入`+status` channel，并给出UUID Version 1的token，在网页版微信里对“文件传输助手”(filehelper)或其他人/群(还是不要骚扰别人吧)发这个token
+- 可以看到微信朋友加入了`+status`，在这个channel发信并不会群发，只是为了让客户端补全nick。这个channel的消息用于查看/控制wechatircd的状态。
+- nick优先选取备注名(`RemarkName`)，其次为`DisplayName`(原始JS根据昵称等自动填写的一个名字)
 
 如果微信网页版显示QR code要求重新登录，登录后继续对“文件传输助手”32个十六进制数字的token即可。
 服务端或客户端重启，根据`+status` channel上新的token(或者在`+status` channel发送`new`消息重新获取一个)，在微信网页版上对“文件传输助手”输入token。

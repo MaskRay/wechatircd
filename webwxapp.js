@@ -49,7 +49,7 @@ var wechatircd_LocalID // 服务端通过WebSocket控制网页版发送消息时
 var seenLocalID = new Set()
 var seenUserName = new Map()
 var deliveredUserName = new Map()
-var ws = new MyWebSocket('ws://127.1:9000')
+var ws = new MyWebSocket('wss://127.0.0.1:9000')
 function wechatircd_reset() {
     seenLocalID.clear()
     deliveredUserName.clear()

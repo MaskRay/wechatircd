@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 from argparse import ArgumentParser
-from autobahn.asyncio.websocket import \
-    WebSocketServerProtocol, WebSocketServerFactory
-from enum import Enum
-from ipdb import set_trace as bp
-import asyncio, inspect, json, logging, pprint, random, re, signal, string, sys, time, traceback, uuid, weakref
+from aiohttp import web
+import aiohttp, asyncio, inspect, json, logging, os, pprint, random, re, \
+    signal, ssl, string, sys, time, traceback, uuid, weakref
 
 logger = logging.getLogger('wechatircd')
 
@@ -28,78 +26,96 @@ class ExceptionHook(object):
             self.instance = ultratb.VerboseTB(call_pdb=True)
         return self.instance(*args, **kwargs)
 
-### WebSocket
+### HTTP serving webwxapp.js & WebSocket server
 
-class WSProtocol(WebSocketServerProtocol):
+class Web:
     instance = None
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.token2transport = {}
-        self.transport2token = {}
-        if not WSProtocol.instance:
-            WSProtocol.instance = self
+    def __init__(self):
+        with open(os.path.join(os.path.dirname(__file__), 'webwxapp.js'), 'rb') as f:
+            self.webwxapp_js = f.read()
+        self.token2ws = {}
+        self.ws2token = {}
+        Web.instance = self
 
-    def onConnect(self, request):
-        info('WebSocket connected to %r', request.peer)
-
-    def onMessage(self, payload, isBinary):
-        try:
-            data = json.loads(payload.decode())
-            token = data['token']
-            t = self.transport
-            assert isinstance(token, str) and re.match(r'^[0-9a-f]{32}$', token)
-            if t in self.transport2token:
-                if self.transport2token[t] != token:
-                    self.remove_transport(t)
-            if t not in self.transport2token:
-                if token in self.token2transport:
-                    self.remove_token(token)
-                self.transport2token[t] = token
-                self.token2transport[token] = t
-                Server.instance.on_wechat_open(token, t.get_extra_info('peername'))
-            Server.instance.on_wechat(data)
-        except AssertionError:
-            pass
-        except:
-            raise
-            pass
-
-    def onClose(self, was_clean, code, reason):
-        t = self.transport
-        peername = t.get_extra_info('peername')
-        info('WebSocket disconnected from %r', peername)
-        if t in self.transport2token:
-            token = self.transport2token[t]
-            self.token2transport.pop(token)
-            self.transport2token.pop(t)
-            Server.instance.on_wechat_close(token, peername)
-
-    def remove_transport(self, transport):
-        self.token2transport.pop(self.transport2token[transport])
-        self.transport2token.pop(transport)
+    def remove_ws(self, ws):
+        del self.token2ws[self.ws2token[ws]]
+        del self.ws2token[ws]
 
     def remove_token(self, token):
-        self.transport2token.pop(self.token2transport[token])
-        self.token2transport.pop(token)
+        del self.ws2token[self.token2ws[token]]
+        del self.token2ws[token]
+
+    async def handle_webwxapp_js(self, request):
+        return web.Response(body=self.webwxapp_js,
+                            headers={'Content-Type': 'application/javascript; charset=UTF-8',
+                                     'Access-Control-Allow-Origin': '*'})
+
+    async def handle_web_socket(self, request):
+        ws = web.WebSocketResponse()
+        await ws.prepare(request)
+        peername = request.transport.get_extra_info('peername')
+        info('WebSocket connected to %r', peername)
+        async for msg in ws:
+            if msg.tp == web.MsgType.text:
+                try:
+                    data = json.loads(msg.data)
+                    token = data['token']
+                    assert isinstance(token, str) and re.match(r'^[0-9a-f]{32}$', token)
+                    if ws in self.ws2token:
+                        if self.ws2token[ws] != token:
+                            self.remove_ws(ws)
+                    if ws not in self.ws2token:
+                        if token in self.token2ws:
+                            self.remove_token(token)
+                        self.ws2token[ws] = token
+                        self.token2ws[token] = ws
+                        Server.instance.on_wechat_open(token, peername)
+                    Server.instance.on_wechat(data)
+                except:
+                    break
+            elif msg.tp == web.MsgType.ping:
+                try:
+                    ws.pong()
+                except:
+                    break
+            elif msg.tp == web.MsgType.close:
+                break
+        info('WebSocket disconnected from %r', peername)
+        if t in self.ws2token:
+            token = self.ws2token[t]
+            self.remove_ws(t)
+            Server.instance.on_wechat_close(token, peername)
+        return ws
 
     def send(self, token, receiver, msg):
-        if token in self.token2transport:
-            old = self.transport
+        if token in self.token2ws:
+            ws = self.token2ws[token]
             try:
-                self.transport = self.token2transport[token]
-                self.sendMessage(json.dumps({
+                ws.send_str(json.dumps({
                     'command': 'send_text_message',
                     'receiver': receiver,
                     'message': msg,
                     #@ webwxapp.js /e.ClientMsgId = e.LocalID = e.MsgId = (utilFactory.now() + Math.random().toFixed(3)).replace(".", ""),
                     'local_id': '{}0{:03}'.format(int(time.time()*1000), random.randint(0, 999)),
-                }, ensure_ascii=False).encode())
+                }, ensure_ascii=False))
             except:
-                raise
                 pass
-            finally:
-                self.transport = old
+
+    def start(self, host, port, tls, loop):
+        self.loop = loop
+        self.app = aiohttp.web.Application()
+        self.app.router.add_route('GET', '/', self.handle_web_socket)
+        self.app.router.add_route('GET', '/webwxapp.js', self.handle_webwxapp_js)
+        self.handler = self.app.make_handler()
+        self.srv = loop.run_until_complete(loop.create_server(self.handler, host, port, ssl=tls))
+
+    def stop(self):
+        self.srv.close()
+        self.loop.run_until_complete(self.srv.wait_closed())
+        self.loop.run_until_complete(self.app.shutdown())
+        self.loop.run_until_complete(self.handler.finish_connections(0))
+        self.loop.run_until_complete(self.app.cleanup())
 
 ### IRC
 
@@ -111,6 +127,7 @@ def irc_lower(s):
 
 # loose
 def irc_escape(s):
+    s = re.sub(r',', '.', s)
     s = re.sub(r'<[^>]*>', '', s)
     return re.sub(r'[^-\w$%^*()=./]', '', s)
 
@@ -233,7 +250,7 @@ class RegisteredCommands:
         if client.has_wechat_user(target):
             user = client.get_wechat_user(target)
             if user.is_friend:
-                WSProtocol.instance.send(client.token, user.username, msg)
+                Web.instance.send(client.token, user.username, msg)
             else:
                 client.err_nosuchnick(target)
         # then IRC nick
@@ -473,8 +490,8 @@ class WeChatRoom:
     def update(self, client, record):
         self.record.update(record)
         old_name = getattr(self, 'name', None)
-        base = '#' + irc_escape(record['DisplayName'])
-        if base == '#':
+        base = '&' + irc_escape(record['DisplayName'])
+        if base == '&':
             base += '.'.join(member.nick for member in self.members)[:20]
         suffix = ''
         while 1:
@@ -505,7 +522,7 @@ class WeChatRoom:
         self.members = seen
 
     def on_notice_or_privmsg(self, client, command, msg):
-        WSProtocol.instance.send(client.token, self.username, msg)
+        Web.instance.send(client.token, self.username, msg)
 
     def on_event(self, source, command, msg):
         if self.joined:
@@ -792,8 +809,9 @@ class WeChatUser:
 
 class Server:
     valid_nickname = re.compile(r"^[][\`_^{|}A-Za-z][][\`_^{|}A-Za-z0-9-]{0,50}$")
-    # + is reserved for special channels
-    valid_channelname = re.compile(r"^[&#!][^\x00\x07\x0a\x0d ,:]{0,50}$")
+    # initial character `+` is reserved for special channels
+    # initial character `&` is reserved for WeChat chatrooms
+    valid_channelname = re.compile(r"^[#!][^\x00\x07\x0a\x0d ,:]{0,50}$")
     instance = None
 
     def __init__(self, options):
@@ -897,27 +915,43 @@ def main():
     ap.add_argument('-t', '--tags', action='store_true', help='generate tags for wx.js')
     ap.add_argument('-d', '--debug', action='store_true', help='run ipdb on uncaught exception')
     ap.add_argument('-l', '--listen', default='127.0.0.1', help='listen address')
-    ap.add_argument('-p', '--port', type=int, default=6667, help='listen port')
+    ap.add_argument('-p', '--port', type=int, default=6667, help='IRC server listen port')
     ap.add_argument('--password', help='admin password')
-    ap.add_argument('--ws-port', type=int, default=9000, help='WebSocket listen port')
-    ap.add_argument('--heartbeat', type=int, default=1000, help='heartbeat') # TODO
+    ap.add_argument('--heartbeat', type=int, default=30, help='time to wait for IRC commands. The server will send PING and close the connection after another timeout of equal duration if no commands is received.')
+    ap.add_argument('--web-port', type=int, default=9000, help='HTTP/WebSocket listen port')
+    ap.add_argument('--tls-cert', help='HTTP/WebSocket listen port')
+    ap.add_argument('--tls-key', help='HTTP/WebSocket listen port')
     options = ap.parse_args()
-    logging.basicConfig(level=options.loglevel or logging.INFO,
-                        format='%(asctime)s:%(levelname)s: %(message)s')
+
+    # send to syslog if run as a daemon (no controlling terminal)
+    try:
+        with open('/dev/tty'):
+            pass
+        logging.basicConfig(format='%(asctime)s:%(levelname)s: %(message)s')
+    except OSError:
+        logging.root.addHandler(logging.handlers.SysLogHandler('/dev/log'))
+    logging.root.setLevel(options.loglevel or logging.INFO)
+
+    if options.tls_cert:
+        tls = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
+        tls.load_cert_chain(options.tls_cert, options.tls_key)
+    else:
+        tls = None
 
     loop = asyncio.get_event_loop()
     if options.debug:
         sys.excepthook = ExceptionHook()
     server = Server(options)
+    web = Web()
 
-    factory = WebSocketServerFactory('ws://{}:{}'.format(options.listen, options.ws_port))
-    factory.protocol = WSProtocol
-    loop.run_until_complete(loop.create_server(factory, options.listen, options.ws_port))
     server.start(loop)
+    web.start(options.listen, options.web_port, tls, loop)
     try:
         loop.run_forever()
     except KeyboardInterrupt:
         server.stop()
+        web.stop()
+        loop.stop()
 
 
 if __name__ == '__main__':
