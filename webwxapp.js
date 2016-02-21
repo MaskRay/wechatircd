@@ -2575,7 +2575,9 @@ angular.module("Services", []),
                             // 非服务端生成
                             else {
                                 var sender = contactFactory.getContact(e.MMActualSender)
+                                sender = Object.assign({}, sender, {DisplayName: sender.RemarkName || sender.getDisplayName()})
                                 var receiver = contactFactory.getContact(e.MMPeerUserName)
+                                receiver = Object.assign({}, receiver, {DisplayName: receiver.RemarkName || receiver.getDisplayName()})
                                 if (e.MMIsChatRoom) {
                                     ws.send({token: token,
                                             command: 'message',

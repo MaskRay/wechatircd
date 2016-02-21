@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 from aiohttp import web
 from ipdb import set_trace as bp
 import aiohttp, asyncio, inspect, json, logging, os, pprint, random, re, \
@@ -7,17 +7,22 @@ import aiohttp, asyncio, inspect, json, logging, os, pprint, random, re, \
 
 logger = logging.getLogger('wechatircd')
 
+
 def debug(msg, *args):
     logger.debug(msg, *args)
+
 
 def info(msg, *args):
     logger.info(msg, *args)
 
+
 def warning(msg, *args):
     logger.warning(msg, *args)
 
+
 def error(msg, *args):
     logger.error(msg, *args)
+
 
 class ExceptionHook(object):
     instance = None
@@ -65,7 +70,8 @@ class Web:
                 try:
                     data = json.loads(msg.data)
                     token = data['token']
-                    assert isinstance(token, str) and re.match(r'^[0-9a-f]{32}$', token)
+                    assert isinstance(token, str) and re.match(
+                        r'^[0-9a-f]{32}$', token)
                     if ws in self.ws2token:
                         if self.ws2token[ws] != token:
                             self.remove_ws(ws, peername)
@@ -96,9 +102,11 @@ class Web:
         self.loop = loop
         self.app = aiohttp.web.Application()
         self.app.router.add_route('GET', '/', self.handle_web_socket)
-        self.app.router.add_route('GET', '/webwxapp.js', self.handle_webwxapp_js)
+        self.app.router.add_route(
+            'GET', '/webwxapp.js', self.handle_webwxapp_js)
         self.handler = self.app.make_handler()
-        self.srv = loop.run_until_complete(loop.create_server(self.handler, host, port, ssl=tls))
+        self.srv = loop.run_until_complete(
+            loop.create_server(self.handler, host, port, ssl=tls))
 
     def stop(self):
         self.srv.close()
@@ -160,15 +168,16 @@ class Web:
 ### IRC utilities
 
 def irc_lower(s):
-    irc_trans = str.maketrans(string.ascii_uppercase+'[]\\^',
-                              string.ascii_lowercase+'{}|~')
+    irc_trans = str.maketrans(string.ascii_uppercase + '[]\\^',
+                              string.ascii_lowercase + '{}|~')
     return s.translate(irc_trans)
 
 
 # loose
 def irc_escape(s):
-    s = re.sub(r',', '.', s)
-    s = re.sub(r'<[^>]*>', '', s)
+    s = re.sub(r',', '.', s)       # `,` is used as seprator in IRC messages
+    s = re.sub(r'&amp;?', '', s)   # chatroom name may include `&`
+    s = re.sub(r'<[^>]*>', '', s)  # remove emoji
     return re.sub(r'[^-\w$%^*()=./]', '', s)
 
 ### Commands
@@ -182,13 +191,13 @@ class UnregisteredCommands:
         client.server.change_nick(client, args[0])
 
     @staticmethod
+    def quit(client):
+        client.disconnect('Client quit')
+
+    @staticmethod
     def user(client, user, mode, _, realname):
         client.user = user
         client.realname = realname
-
-    @staticmethod
-    def quit(client):
-        client.disconnect('Client quit')
 
 
 class RegisteredCommands:
@@ -206,14 +215,15 @@ class RegisteredCommands:
     @staticmethod
     def ison(client, *nicks):
         client.reply('303 {} :{}', client.nick,
-                     ' '.join(nick for nick in nicks \
+                     ' '.join(nick for nick in nicks
                               if client.has_wechat_user(nick) or
                               client.server.has_nick(nick)))
 
     @staticmethod
     def join(client, arg):
         if arg == '0':
-            for channel in client.channels.values():
+            channels = list(self.channels.values())
+            for channel in channels:
                 channel.on_part(client, channel.name)
         else:
             for channelname in arg.split(','):
@@ -232,8 +242,26 @@ class RegisteredCommands:
             client.err_notonchannel(channelname)
 
     @staticmethod
+    def list(client, arg=None):
+        # TODO IRC channels
+        if arg:
+            channels = [client.get_channel(channelname)
+                        for channelname in arg.split(',')
+                        if client.has_channel(channelname)]
+        else:
+            channels = list(client.channels.values())
+        channels.sort(key=lambda ch: ch.name)
+        for channel in channels:
+            client.reply('322 {} {} {} :{}', client.nick, channel.name,
+                         channel.n_members(client), channel.topic)
+        client.reply('323 {} :End of LIST', client.nick)
+
+    @staticmethod
     def lusers(client):
-        client.reply('251 :There are {} users', len(client.server.nicks))
+        client.reply('251 :There are {} users and {} WeChat users (local to you) on 1 server',
+                     len(client.server.nicks),
+                     len(client.wechat_users)
+                     )
 
     @staticmethod
     def mode(client, target, *args):
@@ -311,13 +339,17 @@ class RegisteredCommands:
     @staticmethod
     def who(client, target):
         if client.has_wechat_user(target):
-            pass
+            client.get_wechat_user(target).on_who_member(
+                client, StatusChannel.instance.name)
         elif client.server.has_nick(target):
-            pass
+            client.server.get_nick(target).on_who_member(
+                client, client.server.name)
         elif client.is_in_channel(target):
             client.get_channel(target).on_who(client)
         elif client.server.has_channel(target):
             client.server.get_channel(client, target).on_who(client)
+        else:
+            client.err_nosuchnick(target)
         client.reply('315 {} {} :End of WHO list', client.nick, target)
 
     @classmethod
@@ -340,10 +372,12 @@ class RegisteredCommands:
         # then IRC nick
         elif client.server.has_nick(target):
             client2 = client.server.get_nick(target)
-            client2.write(':{} {} {} :{}'.format(client.prefix, 'PRIVMSG', target, msg))
+            client2.write(':{} {} {} :{}'.format(
+                client.prefix, 'PRIVMSG', target, msg))
         # IRC channel or WeChat chatroom
         elif client.is_in_channel(target):
-            channel = client.get_channel(target).on_notice_or_privmsg(client, command, msg)
+            channel = client.get_channel(target).on_notice_or_privmsg(
+                client, command, msg)
         else:
             client.err_nosuchnick(target)
 
@@ -364,38 +398,20 @@ class WeChatCommands:
 
     @staticmethod
     def message(client, data):
-        msg = data['message']
-        # WeChat chatroom
+        # receiver is a WeChat chatroom
         if data.get('room', None):
-            room = client.ensure_wechat_room(data['room'])
-            if data['type'] == 'send':
-                # server generated messages have been filtered by client-side JS
-                client.write(':{} PRIVMSG {} :{}'.format(
-                    client.prefix, room.name, msg))
-            else:
-                # For chatroom events, sender is the same as receiver, e.g. 你邀请xxx加入了群聊
-                if data['sender'] == room.username:
-                    client.write(':{} PRIVMSG {} :{}'.format(
-                        peer.nick, room.name, msg))
-                else:
-                    peer = client.ensure_wechat_user(data['sender'])
-                    client.write(':{} PRIVMSG {} :{}'.format(
-                        peer.nick, room.name, msg))
-        # 微信朋友
+            client.ensure_wechat_room(data['room']) \
+                .on_wechat_message(data)
+        # receiver is a WeChat user
         else:
-            peer = client.ensure_wechat_user(data['receiver' if data['type'] == 'send' else 'sender'])
-            if data['type'] == 'send':
-                client.write(':{} PRIVMSG {} :{}'.format(
-                    client.prefix, peer.nick, msg))
-            else:
-                client.write(':{} PRIVMSG {} :{}'.format(
-                    peer.nick, client.nick, msg))
+            client.ensure_wechat_user(data['receiver' if data['type'] == 'send' else 'sender']) \
+                .on_wechat_message(data)
 
     @staticmethod
     def send_text_message_fail(client, data):
         client.write(':{} NOTICE {} :{}'.format(client.server.name, '+status', 'failed: {}'.format(data['message'])))
 
-### Channels: StandardChannel > StatusChannel, WeChatRoom
+### Channels: StandardChannel, StatusChannel, WeChatRoom
 
 class Channel:
     def __init__(self, name):
@@ -411,6 +427,9 @@ class Channel:
         info('%s %s '+fmt, self.name, source.nick, *args)
 
     def multicast_group(self, source):
+        raise NotImplemented
+
+    def n_members(self, client):
         raise NotImplemented
 
     def event(self, source, command, fmt, *args, include_source=True):
@@ -480,6 +499,9 @@ class StandardChannel(Channel):
 
     def multicast_group(self, source):
         return self.members.keys()
+
+    def n_members(self, client):
+        return len(self.members)
 
     def on_notice_or_privmsg(self, client, command, msg):
         self.event(client, command, '{} :{}', self.name, msg, include_source=False)
@@ -552,8 +574,14 @@ class StatusChannel(Channel):
         StatusChannel.instance = self
 
     def multicast_group(self, source):
-        client = source.client if isinstance(source, WeChatUser) else source
+        client = source.client \
+            if isinstance(source, (WeChatUser, WeChatRoom)) \
+            else source
         return (client,) if client in self.members else ()
+
+    def n_members(self, client):
+        return len(self.shadow_members.get(client, ())) + \
+            (1 if client in self.members else 0)
 
     def respond(self, client, fmt, *args):
         if args:
@@ -570,7 +598,7 @@ class StatusChannel(Channel):
             self.respond(client, 'help         display this help')
         elif msg == 'new':
             client.change_token(uuid.uuid1().hex)
-            self.respond(client, 'new token {}', client.token)
+            self.respond(client, 'new token {} , please paste it to 文件传输助手 on wx.qq.com', client.token)
         elif msg == 'status':
             self.respond(client, 'Token: {}', client.token)
             self.respond(client, 'IRC channels:')
@@ -665,7 +693,8 @@ class WeChatRoom(Channel):
         self.client = client
         self.username = record['UserName']
         self.record = {}
-        self.joined = False   # JOIN event has not been emitted
+        self.idle = True      # no messages yet
+        self.joined = False   # `client` has not joined
         # For large chatrooms, record['MemberList']['Uin'] is very likely
         # to be 0, so the owner is hard to determine.
         # If the owner is determined, he/she is the only op
@@ -688,9 +717,9 @@ class WeChatRoom(Channel):
             suffix = str(int(suffix or 0)+1)
         if name != old_name:
             # PART -> rename -> JOIN to notify the IRC client
-            self.part_event(client, 'Changing name')
+            self.on_part(client, 'Changing name')
             self.name = name
-            self.join_event(client)
+            self.on_join(client)
 
     def update_members(self, client, members):
         owner_uin = self.record['OwnerUin']
@@ -720,6 +749,9 @@ class WeChatRoom(Channel):
         if isinstance(source, (WeChatUser, WeChatRoom)):
             return (source.client,)
         return (source,)
+
+    def n_members(self, client):
+        return len(self.members) + (1 if self.joined else 0)
 
     def on_notice_or_privmsg(self, client, command, msg):
         Web.instance.send_text_message(client.token, self.username, msg)
@@ -758,8 +790,8 @@ class WeChatRoom(Channel):
             client.err_usernotinchannel(nick, self.name)
 
     def on_names(self, client):
-        members = tuple('@'+u.nick if 'o' in m else u.nick
-                        for u, m in self.members) + (client.nick,)
+        members = tuple('@'+u.nick if u == self.owner else u.nick
+                        for u in self.members) + (client.nick,)
         client.reply('353 {} = {} :{}', client.nick, self.name,
                      ' '.join(sorted(members)))
         client.reply('366 {} {} :End of NAMES list', client.nick, self.name)
@@ -790,14 +822,37 @@ class WeChatRoom(Channel):
             super().on_topic(client, new)
 
     def on_who(self, client):
-        members = tuple(x.nick for x in self.members)+(client.nick,)
+        members = tuple(self.members)+(client,)
         for member in members:
             member.on_who_member(client, self.name)
 
+    def on_wechat_message(self, data):
+        msg = data['message']
+        if self.idle:
+            self.idle = False
+            if self.client.options.join == 'auto' and not self.joined:
+                self.on_join(self.client)
+        if data['type'] == 'send':
+            # server generated messages have been filtered by client-side JS
+            self.client.write(':{} PRIVMSG {} :{}'.format(
+                self.client.prefix, self.name, msg))
+        else:
+            # For chatroom events, sender is the same as receiver, e.g. 你邀请xxx加入了群聊
+            if data['sender'] == self.username:
+                self.client.write(':{} PRIVMSG {} :{}'.format(
+                    self.prefix, self.name, msg))
+            else:
+                sender = self.client.ensure_wechat_user(data['sender'])
+                self.client.write(':{} PRIVMSG {} :{}'.format(
+                    sender.nick, self.name, msg))
+
 
 class Client:
-    def __init__(self, server, reader, writer):
+    def __init__(self, server, reader, writer, options):
         self.server = server
+        self.options = Namespace()
+        for k in ['heartbeat', 'join']:
+            setattr(self.options, k,  getattr(options, k))
         self.reader = reader
         self.writer = writer
         peer = writer.get_extra_info('socket').getpeername()
@@ -861,7 +916,8 @@ class Client:
             room.update(self, record)
         else:
             room = WeChatRoom(self, record)
-            room.on_join(self)
+            if self.options.join == 'all':
+                room.on_join(self)
         self.channels[irc_lower(room.name)] = room
         self.username2wechat_room[room.username] = room
         return room
@@ -872,7 +928,7 @@ class Client:
         self.message_related(False, ':{} QUIT :{}', self.prefix, quitmsg)
         self.writer.write_eof()
         self.writer.close()
-        channels = self.channels.values()
+        channels = list(self.channels.values())
         for channel in channels:
             channel.on_part(self, None)
 
@@ -895,32 +951,38 @@ class Client:
     def rpl_channelmodeis(self, channelname, mode):
         self.reply('324 {} {} +{}', self.nick, channelname, mode)
 
+    def rpl_endofnames(self, channelname):
+        self.reply('366 {} {} :End of NAMES list', self.nick, channelname)
+
     def err_nosuchnick(self, name):
-        self.reply('401 {} :Not such nick/channel', name)
+        self.reply('401 {} {} :Not such nick/channel', self.nick, name)
+
+    def err_nosuchserver(self, name):
+        self.reply('402 {} {} :No such server', self.nick, name)
 
     def err_nosuchchannel(self, channelname):
-        self.reply('403 {} :Not such channel', channelname)
+        self.reply('403 {} {} :Not such channel', self.nick, channelname)
 
     def err_noorigin(self):
-        self.reply('409 :Not origin specified')
+        self.reply('409 {} :Not origin specified', self.nick)
 
     def err_norecipient(self, command):
-        self.reply('411 :No recipient given ({})', command)
+        self.reply('411 {} :No recipient given ({})', self.nick, command)
 
     def err_notexttosend(self):
-        self.reply('412 :No text to send')
+        self.reply('412 {} :No text to send', self.nick)
 
     def err_unknowncommand(self, command):
-        self.reply('421 {} :Unknown command', command)
+        self.reply('421 {} {} :Unknown command', self.nick, command)
 
     def err_nonicknamegiven(self):
-        self.reply('431 :No nickname given')
+        self.reply('431 {} :No nickname given', self.nick)
 
     def err_errorneusnickname(self, nick):
-        self.reply('432 {} :Erroneous nickname', nick)
+        self.reply('432 * {} :Erroneous nickname', nick)
 
     def err_nicknameinuse(self, nick):
-        self.reply('433 {} :Nickname is already in use', nick)
+        self.reply('433 * {} :Nickname is already in use', nick)
 
     def err_usernotinchannel(self, nick, channelname):
         self.reply("441 {} {} :They are't on that channel", nick, channelname)
@@ -932,16 +994,16 @@ class Client:
         self.reply('443 {} {} :is already on channel', nick, channelname)
 
     def err_needmoreparams(self, command):
-        self.reply('461 {} :Not enough parameters', command)
+        self.reply('461 {} {} :Not enough parameters', self.nick, command)
 
     def err_nochanmodes(self, channelname):
-        self.reply("477 {} :You're not on that channel", channelname)
+        self.reply("477 {} {} :Channel doesn't support modes", self.nick, channelname)
 
     def err_chanoprivsneeded(self, channelname):
-        self.reply("482 {} :You're not channel operator", channelname)
+        self.reply("482 {} {} :You're not channel operator", self.nick, channelname)
 
     def err_umodeunknownflag(self):
-        self.reply('501 {} :Unknown MODE flag')
+        self.reply('501 {} :Unknown MODE flag', self.nick)
 
     def message_related(self, include_self, fmt, *args):
         '''Send a message to related clients which source is self'''
@@ -988,7 +1050,7 @@ class Client:
             try:
                 line = await asyncio.wait_for(
                     self.reader.readline(), loop=self.server.loop,
-                    timeout=self.server.options.heartbeat)
+                    timeout=self.options.heartbeat)
             except asyncio.TimeoutError:
                 if sent_ping:
                     self.disconnect('ping timeout')
@@ -1017,7 +1079,7 @@ class Client:
             self.handle_command(command, args)
 
     def on_who_member(self, client, channelname):
-        client.reply('352 {} {} {} {} {} H :0 {}', client.nick, channelname,
+        client.reply('352 {} {} {} {} {} {} H :0 {}', client.nick, channelname,
                         self.user, self.host, client.server.name,
                         self.nick, self.realname)
 
@@ -1038,7 +1100,8 @@ class Client:
         self.username2wechat_user.clear()
         # PART all WeChat chatrooms
         for room in self.username2wechat_room.values():
-            room.on_part(self, 'WeChat disconnection')
+            if room.joined:
+                room.on_part(self, 'WeChat disconnection')
         self.username2wechat_room.clear()
         status = StatusChannel.instance
         status.event(status, 'NOTICE',
@@ -1070,14 +1133,16 @@ class WeChatUser:
         suffix = ''
         while 1:
             nick = base+suffix
-            if nick == old_nick or irc_lower(nick) != irc_lower(client.nick) \
-                    and not client.has_wechat_user(nick):
+            if nick and (nick == old_nick or
+                         irc_lower(nick) != irc_lower(client.nick) and
+                         not client.has_wechat_user(nick)):
                 break
             suffix = str(int(suffix or 0)+1)
         if nick != old_nick:
             for channel in self.channels:
                 channel.nick_event(self, nick)
             self.nick = nick
+        # TODO loose
         if 'RemarkName' in self.record:
             if not self.is_friend:
                 self.is_friend = True
@@ -1090,9 +1155,18 @@ class WeChatUser:
         self.channels.remove(channel)
 
     def on_who_member(self, client, channelname):
-        client.reply('352 {} {} {} {} {} H :0 {}', client.nick, channelname,
+        client.reply('352 {} {} {} {} {} {} H :0 {}', client.nick, channelname,
                         self.username, 'WeChat', client.server.name,
                         self.nick, self.username)
+
+    def on_wechat_message(self, data):
+        msg = data['message']
+        if data['type'] == 'send':
+            self.client.write(':{} PRIVMSG {} :{}'.format(
+                self.client.prefix, self.nick, msg))
+        else:
+            self.client.write(':{} PRIVMSG {} :{}'.format(
+                self.prefix, self.client.nick, msg))
 
 
 class Server:
@@ -1104,8 +1178,9 @@ class Server:
 
     def __init__(self, options):
         self.options = options
-        self.channels = {'+status': StatusChannel(self)}
-        self.name = 'meow'
+        status = StatusChannel(self)
+        self.channels = {status.name: status}
+        self.name = 'wechatircd.maskray.me'
         self.nicks = {}
         self.tokens = {}
         assert not Server.instance
@@ -1119,7 +1194,7 @@ class Server:
                 del self.tokens[client.token]
 
         try:
-            client = Client(self, reader, writer)
+            client = Client(self, reader, writer, self.options)
             task = self.loop.create_task(client.handle_irc())
             task.add_done_callback(done)
         except Exception as e:
@@ -1204,12 +1279,16 @@ class Server:
 
 def main():
     ap = ArgumentParser(description='wechatircd brings wx.qq.com to IRC clients')
-    ap.add_argument('-q', '--quiet', action='store_const', const=logging.WARN, dest='loglevel')
-    ap.add_argument('-v', '--verbose', action='store_const', const=logging.DEBUG, dest='loglevel')
-    ap.add_argument('-t', '--tags', action='store_true', help='generate tags for wx.js')
     ap.add_argument('-d', '--debug', action='store_true', help='run ipdb on uncaught exception')
+    ap.add_argument('-j', '--join', choices=['all', 'auto', 'manual'], default='auto',
+                    help='join mode for WeChat chatrooms. all: join all after connected; auto: join after the first message arrives; manual: no automatic join')
     ap.add_argument('-l', '--listen', default='127.0.0.1', help='IRC/HTTP/WebSocket listen address')
-    ap.add_argument('-p', '--port', type=int, default=6667, help='IRC server listen port')
+    ap.add_argument('-p', '--port', type=int, default=6667,
+                    help='IRC server listen port')
+    ap.add_argument('-q', '--quiet', action='store_const', const=logging.WARN, dest='loglevel')
+    ap.add_argument('-t', '--tags', action='store_true',
+                    help='generate tags for wx.js')
+    ap.add_argument('-v', '--verbose', action='store_const', const=logging.DEBUG, dest='loglevel')
     ap.add_argument('--password', help='admin password')
     ap.add_argument('--heartbeat', type=int, default=30, help='time to wait for IRC commands. The server will send PING and close the connection after another timeout of equal duration if no commands is received.')
     ap.add_argument('--web-port', type=int, default=9000, help='HTTP/WebSocket listen port')

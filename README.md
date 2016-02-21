@@ -36,6 +36,12 @@ TLS:
 如果微信网页版显示QR code要求重新登录，登录后继续对“文件传输助手”32个十六进制数字的token即可。
 服务端或客户端重启，根据`+status` channel上新的token(或者在`+status` channel发送`new`消息重新获取一个)，在微信网页版上对“文件传输助手”输入token。
 
+## 功能
+
+- 收发文本消息，emoji会显示成`<img class="qqemoji qqemoji0" text="[Smile]_web" src="/zh_CN/htmledition/v2/images/spacer.gif">`样，发送时用`[Smile]`即可(相当于在网页版文本输入框插入文本后点击发送)
+- 邀请/删除群中成员，转换为IRC客户端的`/invite nick`或`/kick nick`。因为网页版数据限制，无法立即获悉成员变动，channel里可能看不到改变，但实际已经生效了。
+- 重命名群，转换为IRC客户端的`/topic newtopic`命令，
+
 ## JS改动
 
 原始文件`orig/webwxApp2aeaf2.js`在Chrome DevTools里格式化后得到`orig/webwxApp2aeaf2.pretty.js`，可以用`diff -u orig/webwxApp2aeaf2.pretty.js webwxapp.js`查看改动。
