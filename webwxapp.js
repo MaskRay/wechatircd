@@ -2398,30 +2398,23 @@ angular.module("Services", []),
                     try {
                         var self = accountFactory.getUserInfo()
                         if (r) {
-                            r = Object.assign({}, r)
+                            r = Object.assign({IsSelf: r.isSelf()}, r)
                             r.DisplayName = r.RemarkName || r.getDisplayName()
-                            if (! r.isSelf()) {
-                                if (r.MemberList) {
-                                    var xs = [...r.MemberList], hash = 0
-                                    for (var i = xs.length; i--; ) {
-                                        var x = xs[i]
-                                        if (x.UserName == self.UserName)
-                                            xs.splice(i, 1)
-                                        else {
-                                            // to 32-bit
-                                            hash = (hash*31+x.UserName.charCodeAt(2)*71+x.UserName.charCodeAt(3)) | 0
-                                            x.DisplayName = x.RemarkName || x.NickName
-                                        }
-                                    }
-                                    r.Hash = hash
-                                    r.MemberList = xs
+                            if (r.MemberList) {
+                                var hash = 0
+                                for (var x of r.MemberList) {
+                                    // to 32-bit
+                                    hash = (hash*31+x.UserName.charCodeAt(2)*71+x.UserName.charCodeAt(3)) | 0
+                                    x.IsSelf = x.UserName == self.UserName
+                                    x.DisplayName = x.RemarkName || x.NickName
                                 }
-                                var old = seenUserName.get(r.UserName)
-                                if (! old || old.DisplayName != r.DisplayName || old.Hash != r.Hash ||
-                                    old.OwnerUin != r.OwnerUin) {
-                                    seenUserName.set(r.UserName, r)
-                                    deliveredUserName.delete(r.UserName)
-                                }
+                                r.Hash = hash
+                            }
+                            var old = seenUserName.get(r.UserName)
+                            if (! old || old.DisplayName != r.DisplayName || old.Hash != r.Hash ||
+                                old.OwnerUin != r.OwnerUin) {
+                                seenUserName.set(r.UserName, r)
+                                deliveredUserName.delete(r.UserName)
                             }
                         }
                     } catch (ex) {
