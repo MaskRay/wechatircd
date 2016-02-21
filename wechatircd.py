@@ -2,6 +2,7 @@
 from argparse import ArgumentParser, Namespace
 from aiohttp import web
 from ipdb import set_trace as bp
+from datetime import datetime
 import aiohttp, asyncio, inspect, json, logging.handlers, os, pprint, random, re, \
     signal, ssl, string, sys, time, traceback, uuid, weakref
 
@@ -334,6 +335,16 @@ class RegisteredCommands:
         client.disconnect(args[0] if args else client.prefix)
 
     @staticmethod
+    def stats(client, query):
+        if len(query) == 1:
+            if query == 'u':
+                td = datetime.now() - client.server._boot
+                client.reply('242 {} :Server Up {} days {}:{:02}:{:02}',
+                             client.nick, td.days, td.seconds // 3600,
+                             td.seconds // 60 % 60, td.seconds % 60)
+            client.reply('219 {} {} :End of STATS report', client.nick, query)
+
+    @staticmethod
     def topic(client, channelname, new=None):
         if not client.is_in_channel(channelname):
             client.err_notonchannel(channelname)
@@ -367,7 +378,7 @@ class RegisteredCommands:
             user = client.get_wechat_user(target)
             if user.is_friend:
                 Web.instance.send_text_message(client.token, user.username, msg)
-            else:
+            elif command == 'PRIVMSG':
                 client.err_nosuchnick(target)
         # then IRC nick
         elif client.server.has_nick(target):
@@ -378,7 +389,7 @@ class RegisteredCommands:
         elif client.is_in_channel(target):
             channel = client.get_channel(target).on_notice_or_privmsg(
                 client, command, msg)
-        else:
+        elif command == 'PRIVMSG':
             client.err_nosuchnick(target)
 
 
@@ -551,7 +562,7 @@ class StandardChannel(Channel):
         if new:
             self.log(client, 'set topic %r', new)
             self.topic = new
-            self.event(client, 'TOPIC', '{} :{}', channel.name, new)
+            self.event(client, 'TOPIC', '{} :{}', self.name, new)
         else:
             super().on_topic(client, new)
 
@@ -1003,13 +1014,13 @@ class Client:
         self.reply('433 * {} :Nickname is already in use', nick)
 
     def err_usernotinchannel(self, nick, channelname):
-        self.reply("441 {} {} :They are't on that channel", nick, channelname)
+        self.reply("441 {} {} {} :They are't on that channel", self.nick, nick, channelname)
 
     def err_notonchannel(self, channelname):
-        self.reply("442 {} :You're not on that channel", channelname)
+        self.reply("442 {} {} :You're not on that channel", self.nick, channelname)
 
     def err_useronchannel(self, nick, channelname):
-        self.reply('443 {} {} :is already on channel', nick, channelname)
+        self.reply('443 {} {} {} :is already on channel', self.nick, nick, channelname)
 
     def err_needmoreparams(self, command):
         self.reply('461 {} {} :Not enough parameters', self.nick, command)
@@ -1149,6 +1160,8 @@ class WeChatUser:
         # special contacts, e.g. filehelper
         else:
             base = irc_escape(self.username)
+        if not base:
+            base = 'Guest'
         suffix = ''
         while 1:
             nick = base+suffix
@@ -1202,6 +1215,9 @@ class Server:
         self.name = 'wechatircd.maskray.me'
         self.nicks = {}
         self.tokens = {}
+
+        self._boot = datetime.now()
+
         assert not Server.instance
         Server.instance = self
 
