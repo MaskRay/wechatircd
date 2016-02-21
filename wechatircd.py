@@ -207,6 +207,14 @@ class RegisteredCommands:
         pass
 
     @staticmethod
+    def info(client):
+        client.rpl_info('{} users', len(client.server.nicks))
+        client.rpl_info('{} WeChat users', len(client.username2wechat_user))
+        client.rpl_info('{} WeChat friends',
+                        len(StatusChannel.instance.shadow_members.get(client, ())))
+        client.rpl_info('{} WeChat rooms', len(client.username2wechat_room))
+
+    @staticmethod
     def invite(client, nick, channelname):
         if client.is_in_channel(channelname):
             client.get_channel(channelname).on_invite(client, nick)
@@ -345,6 +353,11 @@ class RegisteredCommands:
             client.reply('219 {} {} :End of STATS report', client.nick, query)
 
     @staticmethod
+    def time(client):
+        client.reply('391 {} {} :{}Z', client.nick, client.server.name,
+                     datetime.utcnow().isoformat())
+
+    @staticmethod
     def topic(client, channelname, new=None):
         if not client.is_in_channel(channelname):
             client.err_notonchannel(channelname)
@@ -362,6 +375,17 @@ class RegisteredCommands:
         elif client.is_in_channel(target):
             client.get_channel(target).on_who(client)
         client.reply('315 {} {} :End of WHO list', client.nick, target)
+
+    @staticmethod
+    def whois(client, target):
+        if client.has_wechat_user(target):
+            client.get_wechat_user(target).on_whois(client)
+        elif client.server.has_nick(target):
+            client.server.get_nick(target).on_whois(client)
+        else:
+            client.err_nosuchserver(target)
+            return
+        client.reply('318 {} {} :End of WHOIS list', client.nick, target)
 
     @classmethod
     def notice_or_privmsg(cls, client, command, *args):
@@ -578,6 +602,7 @@ class StatusChannel(Channel):
     def __init__(self, server):
         super().__init__('+status')
         self.server = server
+        self.topic = "Your WeChat friends are listed here. Messages wont't be broadcasted to them. Type 'help' to see available commands"
         self.members = set()
         self.shadow_members = weakref.WeakKeyDictionary()
         assert not StatusChannel.instance
@@ -685,10 +710,10 @@ class StatusChannel(Channel):
                 self.part_event(member, msg)
             self.members.remove(member)
         else:
-            if member not in self.shadow_members[member.client]:
+            if member not in self.shadow_members.get(member.client, ()):
                 return False
             self.part_event(member, msg)
-            self.shadow_members[member.client].pop(member)
+            self.shadow_members[member.client].remove(member)
         member.leave(self)
         return True
 
@@ -983,6 +1008,13 @@ class Client:
     def rpl_endofnames(self, channelname):
         self.reply('366 {} {} :End of NAMES list', self.nick, channelname)
 
+    def rpl_info(self, fmt, *args):
+        line = fmt.format(*args) if args else fmt
+        self.reply('371 {} :{}', self.nick, line)
+
+    def rpl_endofinfo(self, msg):
+        self.reply('374 {} :End of INFO list', self.nick)
+
     def err_nosuchnick(self, name):
         self.reply('401 {} {} :Not such nick/channel', self.nick, name)
 
@@ -1112,6 +1144,13 @@ class Client:
                         self.user, self.host, client.server.name,
                         self.nick, self.realname)
 
+    def on_whois(self, client):
+        client.reply('311 {} {} {} {} * :{}', client.nick, self.nick,
+                     self.user, self.host, self.realname)
+        client.reply('319 {} {} :{}', client.nick, self.nick,
+                     ' '.join(name for name in
+                              client.channels.keys() & self.channels.keys()))
+
     def on_wechat(self, data):
         command = data['command']
         if type(WeChatCommands.__dict__.get(command)) == staticmethod:
@@ -1123,19 +1162,22 @@ class Client:
                      '{} :WeChat connected to {}', status.name, peername)
 
     def on_wechat_close(self, peername):
-        for user in self.nick2wechat_user.values():
-            StatusChannel.instance.on_part(self, 'WeChat disconnection')
-        self.nick2wechat_user.clear()
-        self.username2wechat_user.clear()
-        # PART all WeChat chatrooms
+        # PART all WeChat chatrooms, these chatrooms will be garbage collected
         for room in self.username2wechat_room.values():
             if room.joined:
                 room.on_part(self, 'WeChat disconnection')
         self.name2wechat_room.clear()
         self.username2wechat_room.clear()
+
+        # instead of flooding +status with massive PART messages,
+        # take the shortcut by rejoining the client
+        self.nick2wechat_user.clear()
+        self.username2wechat_user.clear()
         status = StatusChannel.instance
-        status.event(status, 'NOTICE',
-                     '{} :WeChat disconnected from ', status.name, peername)
+        status.shadow_members.get(self, set()).clear()
+        if self in status.members:
+            status.on_part(self, 'WeChat disconnected from {}'.format(peername))
+            status.on_join(self)
 
 
 class WeChatUser:
@@ -1190,6 +1232,10 @@ class WeChatUser:
         client.reply('352 {} {} {} {} {} {} H :0 {}', client.nick, channelname,
                         self.username, 'WeChat', client.server.name,
                         self.nick, self.username)
+
+    def on_whois(self, client):
+        client.reply('311 {} {} {} {} * :{}', client.nick, self.nick,
+                     self.username, 'WeChat', self.record['NickName'])
 
     def on_wechat_message(self, data):
         msg = data['message']

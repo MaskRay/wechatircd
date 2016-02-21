@@ -2492,7 +2492,8 @@ angular.module("Services", []),
             messageProcess: function(e) {
                 var t = this
                   , o = contactFactory.getContact(e.FromUserName, "", !0);
-                if (!o || o.isMuted() || o.isSelf() || o.isShieldUser() || o.isBrandContact() || titleRemind.increaseUnreadMsgNum(),
+                //@ MOVE 更新未读标记数，标题提醒的代码移动至底部，若消息成功发送到服务端则标记为已读
+                if (
                 e.MMPeerUserName = t._getMessagePeerUserName(e),
                 e.MsgType == confFactory.MSGTYPE_STATUSNOTIFY)
                     return void t._statusNotifyProcessor(e);
@@ -2554,8 +2555,8 @@ angular.module("Services", []),
                     }
                     e.MMActualContent = utilFactory.hrefEncode(e.MMActualContent);
                     var r = contactFactory.getContact(e.MMPeerUserName);
-                    e.MMIsSend || r && (r.isMuted() || r.isBrandContact()) || e.MsgType == confFactory.MSGTYPE_SYS || (accountFactory.isNotifyOpen() && t._notify(e),
-                    accountFactory.isSoundOpen() && utilFactory.initMsgNoticePlayer(confFactory.RES_SOUND_RECEIVE_MSG)),
+                    e.MMIsSend || r && (r.isMuted() || r.isBrandContact()) || e.MsgType == confFactory.MSGTYPE_SYS || (accountFactory.isNotifyOpen() && t._notify(e))
+                    //@ MOVE 声音提醒的代码移动至底部，若消息成功发送到服务端则不提醒
                     t.addChatMessage(e),
                     t.addChatList([e])
 
@@ -2586,10 +2587,17 @@ angular.module("Services", []),
                                             receiver: receiver,
                                             message: e.MMActualContent})
                                 }
+                                // 发送成功(无异常)则标记为已读
+                                e.MMUnread = false
                             }
                         } catch (ex) {
                             consoleerror(ex.stack)
                         }
+
+                    if (e.MMUnread) {
+                        !o || o.isMuted() || o.isSelf() || o.isShieldUser() || o.isBrandContact() || titleRemind.increaseUnreadMsgNum()
+                        accountFactory.isSoundOpen() && utilFactory.initMsgNoticePlayer(confFactory.RES_SOUND_RECEIVE_MSG)
+                    }
                 }
             },
             _statusNotifyProcessor: function(e) {
@@ -2968,6 +2976,10 @@ angular.module("Services", []),
                 return -1
             }
         };
+
+        //@PATCH
+        wechatircd.chatFactory = service
+
         return service
     }
     ])
