@@ -873,7 +873,7 @@ class WeChatRoom(Channel):
         if self.idle:
             self.idle = False
             if self.client.options.join == 'auto' and not self.joined:
-                self.on_join(self.client)
+                self.client.auto_join(self)
         if not self.joined:
             return
         if data['type'] == 'send':
@@ -896,7 +896,7 @@ class Client:
     def __init__(self, server, reader, writer, options):
         self.server = server
         self.options = Namespace()
-        for k in ['heartbeat', 'join']:
+        for k in ['heartbeat', 'ignore', 'join']:
             setattr(self.options, k,  getattr(options, k))
         self.reader = reader
         self.writer = writer
@@ -918,6 +918,13 @@ class Client:
 
     def leave(self, channel):
         del self.channels[irc_lower(channel.name)]
+
+    def auto_join(self, room):
+        for regex in self.options.ignore:
+            if re.search(regex, room.name):
+                break
+        else:
+            room.on_join(self)
 
     def change_token(self, new):
         return self.server.change_token(self, new)
@@ -972,7 +979,7 @@ class Client:
             room = WeChatRoom(self, record)
             self.username2wechat_room[room.username] = room
             if self.options.join == 'all':
-                room.on_join(self)
+                self.auto_join(room)
         self.name2wechat_room[irc_lower(room.name)] = room
         return room
 
@@ -1194,7 +1201,8 @@ class WeChatUser:
         return '{}!{}@WeChat'.format(self.nick, self.username.replace('@',''))
 
     def update(self, client, record):
-        self.record.update(record)
+        if not self.record or 'RemarkName' in record:
+            self.record.update(record)
         old_nick = getattr(self, 'nick', None)
         # items in MemberList do not have 'DisplayName' or 'RemarkName'
         if self.username.startswith('@'):
@@ -1361,6 +1369,8 @@ class Server:
 def main():
     ap = ArgumentParser(description='wechatircd brings wx.qq.com to IRC clients')
     ap.add_argument('-d', '--debug', action='store_true', help='run ipdb on uncaught exception')
+    ap.add_argument('-i', '--ignore', nargs='*',
+                    help='list of ignored regex, do not auto join to a WeChat chatroom whose name matches')
     ap.add_argument('-j', '--join', choices=['all', 'auto', 'manual'], default='auto',
                     help='join mode for WeChat chatrooms. all: join all after connected; auto: join after the first message arrives; manual: no automatic join')
     ap.add_argument('-l', '--listen', default='127.0.0.1', help='IRC/HTTP/WebSocket listen address')
@@ -1368,7 +1378,7 @@ def main():
                     help='IRC server listen port')
     ap.add_argument('-q', '--quiet', action='store_const', const=logging.WARN, dest='loglevel')
     ap.add_argument('-t', '--tags', action='store_true',
-                    help='generate tags for wx.js')
+                    help='generate tags for webwxapp.js')
     ap.add_argument('-v', '--verbose', action='store_const', const=logging.DEBUG, dest='loglevel')
     ap.add_argument('--password', help='admin password')
     ap.add_argument('--heartbeat', type=int, default=30, help='time to wait for IRC commands. The server will send PING and close the connection after another timeout of equal duration if no commands is received.')

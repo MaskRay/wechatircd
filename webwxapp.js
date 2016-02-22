@@ -2572,20 +2572,29 @@ angular.module("Services", []),
                                 sender = Object.assign({}, sender, {DisplayName: sender.RemarkName || sender.getDisplayName()})
                                 var receiver = contactFactory.getContact(e.MMPeerUserName)
                                 receiver = Object.assign({}, receiver, {DisplayName: receiver.RemarkName || receiver.getDisplayName()})
+                                var content = e.MMActualContent
+                                if (e.MsgType == confFactory.MSGTYPE_VOICE)
+                                    content = '[Voice] ' + 'https://wx.qq.com'+confFactory.API_webwxgetvoice + "?msgid=" + e.MsgId + "&skey=" + accountFactory.getSkey()
+                                else if (e.MsgType == confFactory.MSGTYPE_IMAGE)
+                                    // e.getMsgImg
+                                    content = '[Image] ' + 'https://wx.qq.com'+confFactory.API_webwxgetmsgimg + "?MsgID=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
+                                else if (e.MsgType == confFactory.MSGTYPE_VIDEO)
+                                    // e.getMsgVideo
+                                    content = '[Video] ' + 'https://wx.qq.com'+confFactory.API_webwxgetvideo + "?msgid=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
                                 if (e.MMIsChatRoom) {
                                     ws.send({token: token,
                                             command: 'message',
                                             type: e.MMIsSend ? 'send' : 'receive',
                                             sender: sender,
                                             room: receiver,
-                                            message: e.MMActualContent})
+                                            message: content})
                                 } else {
                                     ws.send({token: token,
                                             command: 'message',
                                             type: e.MMIsSend ? 'send' : 'receive',
                                             sender: sender,
                                             receiver: receiver,
-                                            message: e.MMActualContent})
+                                            message: content})
                                 }
                                 // 发送成功(无异常)则标记为已读
                                 e.MMUnread = false
