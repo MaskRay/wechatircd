@@ -4,7 +4,7 @@ wechatircd类似于bitlbee，在微信网页版和IRC间建起桥梁，可以使
 
 ## 原理
 
-修改网页版微信用的JS，通过WebSocket把信息发送到服务端，服务端兼做IRC服务端，把IRC客户端的命令通过WebSocket传送到网页版JS执行。
+修改微信网页版用的JS，通过WebSocket把信息发送到服务端，服务端兼做IRC服务端，把IRC客户端的命令通过WebSocket传送到网页版JS执行。
 
 ## 安装
 
@@ -53,7 +53,7 @@ wechatircd类似于bitlbee，在微信网页版和IRC间建起桥梁，可以使
 
 wechatircd是个简单的IRC服务器，可以执行通常的IRC命令，可以对其他客户端私聊，创建standard channel(以`#`开头的channel)。另外若用token与某个微信网页版连接的，就能看到微信联系人(朋友、群联系人)显示为特殊nick、微信群显示为特殊channel(以`&`开头，根据群名自动设置名称)
 
-对于这些特殊nick与channel，以下命令会有特殊作用：
+这些特殊nick与channel只有当前客户端能看到，因此一个服务端支持多个微信帐号同时登录，每个用不同的IRC客户端控制。另外，以下命令会有特殊作用：
 
 - `/query nick`打开与`$nick`的私聊窗口，与之私聊即为在微信上和他/她/它对话
 - `/list`列出所有微信群
@@ -70,6 +70,26 @@ Emoji会显示成`<img class="qqemoji qqemoji0" text="[Smile]_web" src="/zh_CN/h
 ## JS改动
 
 原始文件`orig/webwxApp2aeaf2.js`在Chrome DevTools里格式化后得到`orig/webwxApp2aeaf2.pretty.js`，可以用`diff -u orig/webwxApp2aeaf2.pretty.js webwxapp.js`查看改动。
+
+修改的地方都有`//@`标注，结合diff，方便微信网页版JS更新后重新应用这些修改。增加的代码中大多数地方都用`try catch`保护，出错则`consoleerr(ex.stack)`。原始JS把`console`对象抹掉了……`consoleerr`是我保存的一个副本。
+
+目前的改动如下：
+
+### `webwxapp.js`开头
+
+创建到服务端的WebSocket连接，若`onerror`则自动重连。监听`onmessage`，收到的消息为服务端发来的控制命令：`send_text_message`、`add_member`等。
+
+### 检测输入串是否为32个字符的十六进制数UUID version 1
+
+对“文件传输助手”或其他人发送消息后判断是否为32个字符的十六进制数UUID version 1，是则设置全局变量`token`。
+
+### 定期把通讯录发送到服务端
+
+`getChatList`中用开头定义的`seenUserName`记录微信服务器发送的联系人信息，`deliveredUserName`记录投递到服务端的联系人信息。每隔一段时间把未投递过的联系人发送到服务端。
+
+### 收到微信服务器消息`messageProcess`
+
+原有代码会更新未读标记数及声音提醒，现在改为若成功发送到服务端则不再提醒，以免浏览器的这个标签页造成干扰。
 
 ## FAQ
 
