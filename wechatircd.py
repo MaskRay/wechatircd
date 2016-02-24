@@ -39,8 +39,6 @@ class Web:
     instance = None
 
     def __init__(self):
-        with open(os.path.join(os.path.dirname(__file__), 'webwxapp.js'), 'rb') as f:
-            self.webwxapp_js = f.read()
         self.token2ws = {}
         self.ws2token = {}
         assert not Web.instance
@@ -57,9 +55,10 @@ class Web:
         Server.instance.on_wechat_close(token, peername)
 
     async def handle_webwxapp_js(self, request):
-        return web.Response(body=self.webwxapp_js,
-                            headers={'Content-Type': 'application/javascript; charset=UTF-8',
-                                     'Access-Control-Allow-Origin': '*'})
+        with open(os.path.join(os.path.dirname(__file__), 'webwxapp.js'), 'rb') as f:
+            return web.Response(body=f.read(),
+                                headers={'Content-Type': 'application/javascript; charset=UTF-8',
+                                        'Access-Control-Allow-Origin': '*'})
 
     async def handle_web_socket(self, request):
         ws = web.WebSocketResponse()
@@ -83,7 +82,9 @@ class Web:
                         self.token2ws[token] = ws
                         Server.instance.on_wechat_open(token, peername)
                     Server.instance.on_wechat(data)
-                except AssertionError:
+                except AssertionError as e:
+                    #info('WebSocket %r', e)
+                    raise
                     break
                 except:
                     raise
@@ -419,13 +420,18 @@ class RegisteredCommands:
 
 class WeChatCommands:
     @staticmethod
-    def user(client, data):
-        debug({k: v for k, v in data['record'].items() if k in ['UserName','DisplayName','NickName']})
-        client.ensure_wechat_user(data['record'])
+    def friend(client, data):
+        debug({k: v for k, v in data['record'].items() if k in ['UserName','DisplayName','NickName','IsSelf']})
+        client.ensure_wechat_user(data['record'], 1)
+
+    @staticmethod
+    def non_friend(client, data):
+        debug({k: v for k, v in data['record'].items() if k in ['UserName','DisplayName','NickName','IsSelf']})
+        client.ensure_wechat_user(data['record'], -1)
 
     @staticmethod
     def room(client, data):
-        debug({k: v for k, v in data['record'].items() if k in ['UserName','DisplayName','NickName']})
+        debug({k: v for k, v in data['record'].items() if k in ['UserName','DisplayName','NickName','IsSelf']})
         record = data['record']
         room = client.ensure_wechat_room(record)
         if isinstance(record.get('MemberList'), list):
@@ -439,7 +445,7 @@ class WeChatCommands:
                 .on_wechat_message(data)
         # receiver is a WeChat user
         else:
-            user = client.ensure_wechat_user(data['receiver' if data['type'] == 'send' else 'sender'])
+            user = client.ensure_wechat_user(data['receiver' if data['type'] == 'send' else 'sender'], 0)
             if user:
                 user.on_wechat_message(data)
 
@@ -764,7 +770,7 @@ class WeChatRoom(Channel):
         owner = None
         seen = set()
         for member in members:
-            user = client.ensure_wechat_user(member)
+            user = client.ensure_wechat_user(member, 0)
             if user:
                 seen.add(user)
                 if owner_uin == member['Uin']:
@@ -886,7 +892,7 @@ class WeChatRoom(Channel):
                 self.client.write(':{} PRIVMSG {} :{}'.format(
                     self.prefix, self.name, msg))
             else:
-                sender = self.client.ensure_wechat_user(data['sender'])
+                sender = self.client.ensure_wechat_user(data['sender'], 0)
                 if sender:
                     self.client.write(':{} PRIVMSG {} :{}'.format(
                         sender.nick, self.name, msg))
@@ -944,17 +950,17 @@ class Client:
     def remove_wechat_user(self, nick):
         del self.nick2wechat_user[irc_lower(nick)]
 
-    def ensure_wechat_user(self, record):
+    def ensure_wechat_user(self, record, friend):
         assert isinstance(record['UserName'], str)
-        assert isinstance(record['DisplayName'], str)
+        assert isinstance(record.get('DisplayName', ''), str)
         if record.get('IsSelf'):
             return None
         if record['UserName'] in self.username2wechat_user:
             user = self.username2wechat_user[record['UserName']]
             self.remove_wechat_user(user.nick)
-            user.update(self, record)
+            user.update(self, record, friend)
         else:
-            user = WeChatUser(self, record)
+            user = WeChatUser(self, record, friend)
             self.username2wechat_user[user.username] = user
         self.nick2wechat_user[irc_lower(user.nick)] = user
         return user
@@ -1188,19 +1194,19 @@ class Client:
 
 
 class WeChatUser:
-    def __init__(self, client, record):
+    def __init__(self, client, record, friend):
         self.client = client
         self.username = record['UserName']
         self.channels = set()
         self.is_friend = False
         self.record = {}
-        self.update(client, record)
+        self.update(client, record, friend)
 
     @property
     def prefix(self):
         return '{}!{}@WeChat'.format(self.nick, self.username.replace('@',''))
 
-    def update(self, client, record):
+    def update(self, client, record, friend):
         if not self.record or 'RemarkName' in record:
             self.record.update(record)
         old_nick = getattr(self, 'nick', None)
@@ -1224,11 +1230,17 @@ class WeChatUser:
             for channel in self.channels:
                 channel.nick_event(self, nick)
             self.nick = nick
-        # TODO loose
-        if 'RemarkName' in self.record:
+        # friend
+        if friend > 0:
             if not self.is_friend:
                 self.is_friend = True
                 StatusChannel.instance.on_join(self)
+        # non_friend
+        elif friend < 0:
+            if self.is_friend:
+                self.is_friend = False
+                StatusChannel.instance.on_part(self)
+        # unsure
 
     def enter(self, channel):
         self.channels.add(channel)

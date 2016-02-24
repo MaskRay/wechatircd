@@ -43,77 +43,98 @@ function MyWebSocket(url) {
     this.open(false)
 }
 
-var token
-var wechatircd_ToUserName // 服务端通过WebSocket控制网页版发送消息时指定UserName
-var wechatircd_LocalID // 服务端通过WebSocket控制网页版发送消息时指定LocalID，区分网页版上发送的消息(需要投递到服务端)与服务端发送的消息(不需要投递)
-var seenLocalID = new Set()
-var seenUserName = new Map()
-var deliveredUserName = new Map()
 var ws = new MyWebSocket('wss://127.0.0.1:9000')
-
-var wechatircd = {}
+var consolelog = console.log.bind(console)
+var consoleerror = console.error.bind(console)
+var wechatircd_LocalID // 服务端通过WebSocket控制网页版发送消息时指定LocalID，区分网页版上发送的消息(需要投递到服务端)与服务端发送的消息(不需要投递)
+var seenLocalID = new Set() // 记录服务端请求发送的消息的LocalID，避免服务端收到自己发送的消息
+var token
+var deliveredContact = new Map()
+var deliveredRoomContact = new Map()
 
 function wechatircd_reset() {
     seenLocalID.clear()
-    deliveredUserName.clear()
+    deliveredContact.clear()
+    deliveredRoomContact.clear()
 }
-var consolelog = console.log.bind(console)
-var consoleerror = console.error.bind(console)
 
 // 同步通讯录
 setInterval(() => {
     if (token)
-        // 若token存在则把见过的朋友/群信息投递到服务端
         try {
-            for (var entry of seenUserName) {
-                // TODO Chrome destructuring
-                var username = entry[0], record = entry[1]
-                if (! deliveredUserName.has(username)) {
-                    ws.send({token: token,
-                            command: username.startsWith('@@') ? 'room' : 'user',
-                            record: record})
-                    deliveredUserName.set(username, record)
+            var contacts = contactFactory.getAllContacts()
+            var seen = new Set(Object.keys(contacts))
+            for (var username in contacts) {
+                var x = contacts[username]
+                if (! x.isSelf() && (! deliveredContact.has(username) || JSON.stringify(x) != JSON.stringify(deliveredContact.get(username)))) {
+                    x.DisplayName = x.RemarkName || x.getDisplayName()
+                    var command
+                    if (x.isRoomContact()) {
+                        command = 'room'
+                        for (var member of x.MemberList) {
+                            var u = member.UserName, y = contactFactory.getContact(u), set
+                            if (! y) continue
+                            if (y.isSelf())
+                                member.IsSelf = true
+                            else if (! seen.has(u) && (! ((set = deliveredRoomContact.get(u)) instanceof Set) || ! set.has(y))) {
+                                y.DisplayName = y.RemarkName || y.getDisplayName()
+                                if (! set)
+                                    set = new Set
+                                ws.send({token: token, command: 'non_friend', record: y})
+                                set.add(y)
+                                deliveredRoomContact.set(u, set)
+                            }
+                        }
+                    } else if (x.isBrandContact() || x.isShieldUser())
+                        continue
+                    else if (x.isContact())
+                        command = 'friend'
+                    else
+                        command = 'non_friend'
+                    ws.send({token: token, command: command, record: x})
+                    deliveredContact.set(username, x)
                 }
             }
         } catch (ex) {
             consoleerror(ex.stack)
         }
-}, 5000)
+}, 3000)
 
-ws.onopen = data => {
-    wechatircd_reset()
-}
+ws.onopen = wechatircd_reset
 
 ws.onmessage = data => {
     try {
         data = JSON.parse(data.detail)
         switch (data.command) {
         case 'send_text_message':
-            wechatircd_ToUserName = data.receiver
-            wechatircd_LocalID = data.local_id
-            seenLocalID.add(wechatircd_LocalID)
-            var s = angular.element('#editArea').scope()
-            s.editAreaCtn = data.message.replace('\n', '<br>')
-            s.sendTextMessage()
+            var old = chatFactory.getCurrentUserName()
+            try {
+                chatFactory.setCurrentUserName(data.receiver)
+                wechatircd_LocalID = data.local_id
+                seenLocalID.add(wechatircd_LocalID)
+                editArea.editAreaCtn = data.message.replace('\n', '<br>')
+                editArea.sendTextMessage()
+            } catch (ex) {
+                consoleerror(ex.stack)
+            } finally {
+                chatFactory.setCurrentUserName(old)
+            }
             break
         case 'add_member':
-            wechatircd.chatroomFactory.addMember(data.room, data.user)
+            chatroomFactory.addMember(data.room, data.user)
             break
         case 'del_member':
-            wechatircd.chatroomFactory.delMember(data.room, data.user)
+            chatroomFactory.delMember(data.room, data.user)
             break
         case 'mod_topic':
-            wechatircd.chatroomFactory.modTopic(data.room, data.topic)
+            chatroomFactory.modTopic(data.room, data.topic)
             break
         }
     } catch (ex) {
         consoleerror(ex.stack)
-    } finally {
-        wechatircd_ToUserName = null
-        wechatircd_LocalID = null
     }
-    console.log('+', data)
 }
+
 
 !function() {
     var e, t = function() {}
@@ -2200,7 +2221,8 @@ angular.module("Services", []),
             },
             createMessage: function(e) {
                 switch (e.FromUserName || (e.FromUserName = accountFactory.getUserName()),
-                e.ToUserName || (e.ToUserName = wechatircd_ToUserName || this.getCurrentUserName()),
+                e.ToUserName || (e.ToUserName = this.getCurrentUserName()),
+                //@ PATCH
                 e.ClientMsgId = e.LocalID = e.MsgId = wechatircd_LocalID || (utilFactory.now() + Math.random().toFixed(3)).replace(".", ""),
                 e.CreateTime = Math.round(utilFactory.now() / 1e3),
                 e.MMStatus = confFactory.MSG_SEND_STATUS_READY,
@@ -2272,19 +2294,6 @@ angular.module("Services", []),
                         res: e
                     }),
                     msg.MMStatus = confFactory.MSG_SEND_STATUS_FAIL)
-
-                    //@ PATCH
-                    try {
-                        if (/([a-f0-9]{32})/.test(msg.MMActualContent)) {
-                            var new_token = RegExp.$1
-                            if (token !== new_token) {
-                                token = new_token
-                                wechatircd_reset()
-                            }
-                        }
-                    } catch (ex) {
-                        consoleerror(ex.stack)
-                    }
                 }).error(function(e) {
                     reportService.report(reportService.ReportType.netError, {
                         text: "postMessage error",
@@ -2392,34 +2401,6 @@ angular.module("Services", []),
                         MMDigestTime: n.MMDigestTime || ""
                     }),
                     t.push(a))
-
-                    //@ PATCH
-                    // 记录未见过朋友/群的UserName
-                    try {
-                        var self = accountFactory.getUserInfo()
-                        if (r) {
-                            r = Object.assign({IsSelf: r.isSelf()}, r)
-                            r.DisplayName = r.RemarkName || r.getDisplayName()
-                            if (r.MemberList) {
-                                var hash = 0
-                                for (var x of r.MemberList) {
-                                    // to 32-bit
-                                    hash = (hash*31+x.UserName.charCodeAt(2)*71+x.UserName.charCodeAt(3)) | 0
-                                    x.IsSelf = x.UserName == self.UserName
-                                    x.DisplayName = x.RemarkName || x.NickName
-                                }
-                                r.Hash = hash
-                            }
-                            var old = seenUserName.get(r.UserName)
-                            if (! old || old.DisplayName != r.DisplayName || old.Hash != r.Hash ||
-                                old.OwnerUin != r.OwnerUin) {
-                                seenUserName.set(r.UserName, r)
-                                deliveredUserName.delete(r.UserName)
-                            }
-                        }
-                    } catch (ex) {
-                        consoleerror(ex.stack)
-                    }
                 }),
                 [].push.apply(_chatListInfos, handleChatList(t)),
                 _chatListInfos
@@ -2572,32 +2553,36 @@ angular.module("Services", []),
                                 sender = Object.assign({}, sender, {DisplayName: sender.RemarkName || sender.getDisplayName()})
                                 var receiver = contactFactory.getContact(e.MMPeerUserName)
                                 receiver = Object.assign({}, receiver, {DisplayName: receiver.RemarkName || receiver.getDisplayName()})
-                                var content = e.MMActualContent
-                                if (e.MsgType == confFactory.MSGTYPE_VOICE)
-                                    content = '[Voice] ' + 'https://wx.qq.com'+confFactory.API_webwxgetvoice + "?msgid=" + e.MsgId + "&skey=" + accountFactory.getSkey()
-                                else if (e.MsgType == confFactory.MSGTYPE_IMAGE)
-                                    // e.getMsgImg
-                                    content = '[Image] ' + 'https://wx.qq.com'+confFactory.API_webwxgetmsgimg + "?MsgID=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
-                                else if (e.MsgType == confFactory.MSGTYPE_VIDEO)
-                                    // e.getMsgVideo
-                                    content = '[Video] ' + 'https://wx.qq.com'+confFactory.API_webwxgetvideo + "?msgid=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
-                                if (e.MMIsChatRoom) {
-                                    ws.send({token: token,
-                                            command: 'message',
-                                            type: e.MMIsSend ? 'send' : 'receive',
-                                            sender: sender,
-                                            room: receiver,
-                                            message: content})
-                                } else {
-                                    ws.send({token: token,
-                                            command: 'message',
-                                            type: e.MMIsSend ? 'send' : 'receive',
-                                            sender: sender,
-                                            receiver: receiver,
-                                            message: content})
+                                if (sender && receiver) {
+                                    delete sender.MemberList
+                                    delete receiver.MemberList
+                                    var content = e.MMActualContent
+                                    if (e.MsgType == confFactory.MSGTYPE_VOICE)
+                                        content = '[Voice] ' + 'https://wx.qq.com'+confFactory.API_webwxgetvoice + "?msgid=" + e.MsgId + "&skey=" + accountFactory.getSkey()
+                                    else if (e.MsgType == confFactory.MSGTYPE_IMAGE)
+                                        // e.getMsgImg
+                                        content = '[Image] ' + 'https://wx.qq.com'+confFactory.API_webwxgetmsgimg + "?MsgID=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
+                                    else if (e.MsgType == confFactory.MSGTYPE_VIDEO)
+                                        // e.getMsgVideo
+                                        content = '[Video] ' + 'https://wx.qq.com'+confFactory.API_webwxgetvideo + "?msgid=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
+                                    if (e.MMIsChatRoom) {
+                                        ws.send({token: token,
+                                                command: 'message',
+                                                type: e.MMIsSend ? 'send' : 'receive',
+                                                sender: sender,
+                                                room: receiver,
+                                                message: content})
+                                    } else {
+                                        ws.send({token: token,
+                                                command: 'message',
+                                                type: e.MMIsSend ? 'send' : 'receive',
+                                                sender: sender,
+                                                receiver: receiver,
+                                                message: content})
+                                    }
+                                    // 发送成功(无异常)则标记为已读
+                                    e.MMUnread = false
                                 }
-                                // 发送成功(无异常)则标记为已读
-                                e.MMUnread = false
                             }
                         } catch (ex) {
                             consoleerror(ex.stack)
@@ -2985,10 +2970,6 @@ angular.module("Services", []),
                 return -1
             }
         };
-
-        //@PATCH
-        wechatircd.chatFactory = service
-
         return service
     }
     ])
@@ -3092,8 +3073,6 @@ angular.module("Services", []),
                 })
             }
         };
-        //@PATCH
-        wechatircd.chatroomFactory = d
         return d
     }
     ])
@@ -8510,3 +8489,23 @@ function() {
     ]),
     angular.bootstrap(document, ["webwxApp"])
 }();
+
+
+//@ PATCH
+var injector = angular.element(document).injector()
+var chatFactory = injector.get('chatFactory')
+var chatroomFactory = injector.get('chatroomFactory')
+var contactFactory = injector.get('contactFactory')
+var editArea = angular.element('#editArea').scope()
+
+var postTextMessage = chatFactory.postTextMessage
+chatFactory.postTextMessage = function(e) {
+    if (/^\s*([a-f0-9]{32})\s*$/.test(e.MMSendContent)) {
+        var new_token = RegExp.$1
+        if (token !== new_token) {
+            token = new_token
+            wechatircd_reset()
+        }
+    }
+    return postTextMessage.call(this, e)
+}
