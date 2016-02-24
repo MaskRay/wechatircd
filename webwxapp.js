@@ -2565,6 +2565,12 @@ angular.module("Services", []),
                                     else if (e.MsgType == confFactory.MSGTYPE_VIDEO)
                                         // e.getMsgVideo
                                         content = '[Video] ' + 'https://wx.qq.com'+confFactory.API_webwxgetvideo + "?msgid=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
+                                    else if (e.MsgType == confFactory.MSGTYPE_MICROVIDEO)
+                                        content = '[MicroVideo] ' + 'https://wx.qq.com'+confFactory.API_webwxgetvideo + "?msgid=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
+                                    else if (e.MsgType == confFactory.MSGTYPE_APP) {
+                                        var appmsg = $.parseHTML(e.Content.replace(/&lt;?/g,'<').replace(/&gt;?/g,'>').replace(/&amp;?/g,'&'))[0]
+                                        content = '[App] ' + $('title', appmsg).text() + ' ' + $('url', appmsg).text()
+                                    }
                                     if (e.MMIsChatRoom) {
                                         ws.send({token: token,
                                                 command: 'message',
@@ -2572,16 +2578,17 @@ angular.module("Services", []),
                                                 sender: sender,
                                                 room: receiver,
                                                 message: content})
-                                    } else {
+                                        // 发送成功(无异常)则标记为已读
+                                        e.MMUnread = false
+                                    } else if (! sender.isBrandContact()) {
                                         ws.send({token: token,
                                                 command: 'message',
                                                 type: e.MMIsSend ? 'send' : 'receive',
                                                 sender: sender,
                                                 receiver: receiver,
                                                 message: content})
+                                        e.MMUnread = false
                                     }
-                                    // 发送成功(无异常)则标记为已读
-                                    e.MMUnread = false
                                 }
                             }
                         } catch (ex) {
