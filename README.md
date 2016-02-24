@@ -63,9 +63,18 @@ wechatircd是个简单的IRC服务器，可以执行通常的IRC命令，可以�
 - 在微信群的channel里`/kick nick`即为删除成员。因为网页版数据限制，无法立即获悉成员变动，channel里可能看不到改变，但实际已经生效了
 - `/topic topic`为重命名群，因为IRC不支持channel改名，实现方式为会自动退出原名称的channel并加入新名称的channel
 
-Emoji会显示成`<img class="qqemoji qqemoji0" text="[Smile]_web" src="/zh_CN/htmledition/v2/images/spacer.gif">`样，发送时用`[Smile]`即可(相当于在网页版文本输入框插入文本后点击发送)
-
 ![](https://maskray.me/static/2016-02-21-wechatircd/topic-kick-invite.jpg)
+
+### 显示
+
+- `MSGTYPE_TEXT`，文本或是视频/语音聊天请求，显示文本
+- `MSGTYPE_IMG`，图片，显示`[Image]`跟URL
+- `MSGTYPE_VOICE`，语音，显示`[Image]`跟URL
+- `MSGTYPE_VIDEO`，视频，显示`[Video]`跟URL
+- `MSGTYPE_MICROVIDEO`，微视频?，显示`[MicroVideo]`跟URL
+- `MSGTYPE_APP`，订阅号新文章、各种应用分享送红包、URL分享等属于此类，还有子分类`APPMSGTYPE_*`，显示`[App]`跟title跟URL
+
+Emoji会显示成`<img class="qqemoji qqemoji0" text="[Smile]_web" src="/zh_CN/htmledition/v2/images/spacer.gif">`样，发送时用`[Smile]`即可(相当于在网页版文本输入框插入文本后点击发送)
 
 ## JS改动
 
@@ -85,11 +94,33 @@ Emoji会显示成`<img class="qqemoji qqemoji0" text="[Smile]_web" src="/zh_CN/h
 
 ### 定期把通讯录发送到服务端
 
-`getChatList`中用开头定义的`seenUserName`记录微信服务器发送的联系人信息，`deliveredUserName`记录投递到服务端的联系人信息。每隔一段时间把未投递过的联系人发送到服务端。
+获取所有联系人(朋友、订阅号、群)，`deliveredContact`记录投递到服务端的联系人，`deliveredContact`记录同处一群的非直接联系人。
+
+每隔一段时间把未投递过的联系人发送到服务端。如果token发生变化，就会清空`deliveredContact`等。若联系人信息发生变化，也会更新。
 
 ### 收到微信服务器消息`messageProcess`
 
 原有代码会更新未读标记数及声音提醒，现在改为若成功发送到服务端则不再提醒，以免浏览器的这个标签页造成干扰。
+
+## Python服务端代码
+
+当前只有一个文件`wechatircd.py`，从miniircd抄了很多代码，后来自己又搬了好多RFC上的用不到的东西……
+
+```
+.
+├── Web                      HTTP(s)/WebSocket server
+├── Server                   IRC server
+├── Channel
+│   ├── StandardChannel      `#`开头的IRC channel
+│   ├── StatusChannel        `+status`，查看控制当前微信会话
+│   └── WeChatRoom           微信群对应的channel，仅该客户端可见
+├── (User)
+│   ├── Client               IRC客户端连接
+│   ├── WeChatUser           微信用户对应的user，仅该客户端可见
+├── (IRCCommands)
+│   ├── UnregisteredCommands 注册前可用命令：NICK USER QUIT
+│   ├── RegisteredCommands   注册后可用命令
+```
 
 ## FAQ
 
@@ -106,6 +137,10 @@ Emoji会显示成`<img class="qqemoji qqemoji0" text="[Smile]_web" src="/zh_CN/h
 另外可以在`@run-at document-begin`时`window.stop()`阻断页面加载，然后换血，替换整个`document.documentElement`，先加载自己的小段JS，再加载<https://res.wx.qq.com/zh_CN/htmledition/v2/js/{libs28a2f7,webwxApp2aeaf2}.js>，详见<http://stackoverflow.com/questions/11638509/chrome-extension-remove-script-tags>。我不知道如何控制顺序。另外，两个原有JS的HTTP回应中`Access-Control-Allow-Origin: wx.qq.com`格式不对，浏览器会拒绝XMLHttpRequest加载。
 
 Firefox支持beforescriptexecute事件，可以用UserScript实现劫持、更换`<script>`。
+
+### 用途
+
+可以使用强大的IRC客户端，方便记录日志(微信日志导出太麻烦<https://maskray.me/blog/2014-10-14-wechat-export>)，可以写bot。
 
 ### 查看微信网页版当前采用的token
 
