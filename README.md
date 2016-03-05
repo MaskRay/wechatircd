@@ -146,6 +146,28 @@ Firefox支持beforescriptexecute事件，可以用UserScript实现劫持、更�
 
 DevTools console里查看`token`变量
 
+## 我的配置
+
+`~/.config/systemd/user/wechatircd.service`:
+```
+[Unit]
+Description=wechatircd
+Documentation=https://github.com/MaskRay/wechatircd
+After=network.target
+
+[Service]
+WorkingDirectory=%h/projects/wechatircd
+ExecStart=/home/ray/projects/wechatircd/wechatircd.py --tls-key a.key --tls-cert a.crt --password a --ignore 不想自动加入的群名0 不想自动加入的群名1
+
+[Install]
+WantedBy=graphical.target
+```
+
+WeeChat:
+```
+/server add wechat 127.1/6667 -autoconnect
+```
+
 ## 网上搜集的AngularJS控制网页版微信方法
 
 联系人列表
