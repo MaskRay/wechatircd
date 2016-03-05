@@ -766,7 +766,7 @@ class WeChatRoom(Channel):
                 self.on_join(client)
 
     def update_members(self, client, members):
-        owner_uin = self.record['OwnerUin']
+        owner_uin = self.record.get('OwnerUin', -1)
         owner = None
         seen = set()
         for member in members:
@@ -977,6 +977,7 @@ class Client:
     def ensure_wechat_room(self, record):
         assert isinstance(record['UserName'], str)
         assert isinstance(record['DisplayName'], str)
+        assert isinstance(record.get('OwnerUin', -1), int)
         if record['UserName'] in self.username2wechat_room:
             room = self.username2wechat_room[record['UserName']]
             del self.name2wechat_room[irc_lower(room.name)]

@@ -166,8 +166,6 @@ angular.module("Controllers", []),
         t.isUnLogin = !window.MMCgi.isLogin,
         t.debug = !0,
         t.isShowReader = /qq\.com/gi.test(location.href),
-        t.isZoom = 1 != detectZoom.zoom(),
-        console.log("是否缩放", t.isZoom),
         window.MMCgi.isLogin && (T(),
         h.browser.chrome && !MMDEV && (window.onbeforeunload = function(e) {
             return e = e || window.event,
@@ -8155,6 +8153,142 @@ angular.module("Filters", []),
 }(),
 function() {
     "use strict";
+    function e(e, t) {
+        var o = (65535 & e) + (65535 & t)
+          , n = (e >> 16) + (t >> 16) + (o >> 16);
+        return n << 16 | 65535 & o
+    }
+    function t(e, t) {
+        return e << t | e >>> 32 - t
+    }
+    function o(o, n, r, a, i, c) {
+        return e(t(e(e(n, o), e(a, c)), i), r)
+    }
+    function n(e, t, n, r, a, i, c) {
+        return o(t & n | ~t & r, e, t, a, i, c)
+    }
+    function r(e, t, n, r, a, i, c) {
+        return o(t & r | n & ~r, e, t, a, i, c)
+    }
+    function a(e, t, n, r, a, i, c) {
+        return o(t ^ n ^ r, e, t, a, i, c)
+    }
+    function i(e, t, n, r, a, i, c) {
+        return o(n ^ (t | ~r), e, t, a, i, c)
+    }
+    function c(t, o) {
+        t[o >> 5] |= 128 << o % 32,
+        t[(o + 64 >>> 9 << 4) + 14] = o;
+        var c, s, l, u, f, d = 1732584193, g = -271733879, m = -1732584194, p = 271733878;
+        for (c = 0; c < t.length; c += 16)
+            s = d,
+            l = g,
+            u = m,
+            f = p,
+            d = n(d, g, m, p, t[c], 7, -680876936),
+            p = n(p, d, g, m, t[c + 1], 12, -389564586),
+            m = n(m, p, d, g, t[c + 2], 17, 606105819),
+            g = n(g, m, p, d, t[c + 3], 22, -1044525330),
+            d = n(d, g, m, p, t[c + 4], 7, -176418897),
+            p = n(p, d, g, m, t[c + 5], 12, 1200080426),
+            m = n(m, p, d, g, t[c + 6], 17, -1473231341),
+            g = n(g, m, p, d, t[c + 7], 22, -45705983),
+            d = n(d, g, m, p, t[c + 8], 7, 1770035416),
+            p = n(p, d, g, m, t[c + 9], 12, -1958414417),
+            m = n(m, p, d, g, t[c + 10], 17, -42063),
+            g = n(g, m, p, d, t[c + 11], 22, -1990404162),
+            d = n(d, g, m, p, t[c + 12], 7, 1804603682),
+            p = n(p, d, g, m, t[c + 13], 12, -40341101),
+            m = n(m, p, d, g, t[c + 14], 17, -1502002290),
+            g = n(g, m, p, d, t[c + 15], 22, 1236535329),
+            d = r(d, g, m, p, t[c + 1], 5, -165796510),
+            p = r(p, d, g, m, t[c + 6], 9, -1069501632),
+            m = r(m, p, d, g, t[c + 11], 14, 643717713),
+            g = r(g, m, p, d, t[c], 20, -373897302),
+            d = r(d, g, m, p, t[c + 5], 5, -701558691),
+            p = r(p, d, g, m, t[c + 10], 9, 38016083),
+            m = r(m, p, d, g, t[c + 15], 14, -660478335),
+            g = r(g, m, p, d, t[c + 4], 20, -405537848),
+            d = r(d, g, m, p, t[c + 9], 5, 568446438),
+            p = r(p, d, g, m, t[c + 14], 9, -1019803690),
+            m = r(m, p, d, g, t[c + 3], 14, -187363961),
+            g = r(g, m, p, d, t[c + 8], 20, 1163531501),
+            d = r(d, g, m, p, t[c + 13], 5, -1444681467),
+            p = r(p, d, g, m, t[c + 2], 9, -51403784),
+            m = r(m, p, d, g, t[c + 7], 14, 1735328473),
+            g = r(g, m, p, d, t[c + 12], 20, -1926607734),
+            d = a(d, g, m, p, t[c + 5], 4, -378558),
+            p = a(p, d, g, m, t[c + 8], 11, -2022574463),
+            m = a(m, p, d, g, t[c + 11], 16, 1839030562),
+            g = a(g, m, p, d, t[c + 14], 23, -35309556),
+            d = a(d, g, m, p, t[c + 1], 4, -1530992060),
+            p = a(p, d, g, m, t[c + 4], 11, 1272893353),
+            m = a(m, p, d, g, t[c + 7], 16, -155497632),
+            g = a(g, m, p, d, t[c + 10], 23, -1094730640),
+            d = a(d, g, m, p, t[c + 13], 4, 681279174),
+            p = a(p, d, g, m, t[c], 11, -358537222),
+            m = a(m, p, d, g, t[c + 3], 16, -722521979),
+            g = a(g, m, p, d, t[c + 6], 23, 76029189),
+            d = a(d, g, m, p, t[c + 9], 4, -640364487),
+            p = a(p, d, g, m, t[c + 12], 11, -421815835),
+            m = a(m, p, d, g, t[c + 15], 16, 530742520),
+            g = a(g, m, p, d, t[c + 2], 23, -995338651),
+            d = i(d, g, m, p, t[c], 6, -198630844),
+            p = i(p, d, g, m, t[c + 7], 10, 1126891415),
+            m = i(m, p, d, g, t[c + 14], 15, -1416354905),
+            g = i(g, m, p, d, t[c + 5], 21, -57434055),
+            d = i(d, g, m, p, t[c + 12], 6, 1700485571),
+            p = i(p, d, g, m, t[c + 3], 10, -1894986606),
+            m = i(m, p, d, g, t[c + 10], 15, -1051523),
+            g = i(g, m, p, d, t[c + 1], 21, -2054922799),
+            d = i(d, g, m, p, t[c + 8], 6, 1873313359),
+            p = i(p, d, g, m, t[c + 15], 10, -30611744),
+            m = i(m, p, d, g, t[c + 6], 15, -1560198380),
+            g = i(g, m, p, d, t[c + 13], 21, 1309151649),
+            d = i(d, g, m, p, t[c + 4], 6, -145523070),
+            p = i(p, d, g, m, t[c + 11], 10, -1120210379),
+            m = i(m, p, d, g, t[c + 2], 15, 718787259),
+            g = i(g, m, p, d, t[c + 9], 21, -343485551),
+            d = e(d, s),
+            g = e(g, l),
+            m = e(m, u),
+            p = e(p, f);
+        return [d, g, m, p]
+    }
+    function s(e) {
+        var t, o = "";
+        for (t = 0; t < 32 * e.length; t += 8)
+            o += String.fromCharCode(e[t >> 5] >>> t % 32 & 255);
+        return o
+    }
+    function l(e) {
+        var t, o = [];
+        for (o[(e.length >> 2) - 1] = void 0,
+        t = 0; t < o.length; t += 1)
+            o[t] = 0;
+        for (t = 0; t < 8 * e.length; t += 8)
+            o[t >> 5] |= (255 & e.charCodeAt(t / 8)) << t % 32;
+        return o
+    }
+    function u(e) {
+        return s(c(l(e), 8 * e.length))
+    }
+    function f(e) {
+        var t, o, n = "0123456789abcdef", r = "";
+        for (o = 0; o < e.length; o += 1)
+            t = e.charCodeAt(o),
+            r += n.charAt(t >>> 4 & 15) + n.charAt(15 & t);
+        return r
+    }
+    function d(e) {
+        return unescape(encodeURIComponent(e))
+    }
+    function g(e) {
+        return u(d(e))
+    }
+    function m(e) {
+        return f(g(e))
+    }
     angular.module("webwxApp", ["ui.router", "ngAnimate", "Services", "Controllers", "Directives", "Filters", "ngDialog", "jQueryScrollbar", "ngClipboard", "exceptionOverride"]).run(["$rootScope", "$state", "$stateParams", function(e, t, o) {
         e.$state = t,
         e.$stateParams = o
@@ -8284,6 +8418,9 @@ function() {
             }
         })
     }
-    ]),
+    ]);
+    var p = angular.bootstrap.toString()
+      , h = m(p);
+    "54c6b762ad3618c9ebfd4b439c8d4bda" !== h && $.getScript("https://tajs.qq.com/stats?sId=54802481"),
     angular.bootstrap(document, ["webwxApp"])
 }();
