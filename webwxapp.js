@@ -2532,6 +2532,9 @@ angular.module("Services", []),
                     default:
                         e.MMDigest = MM.context("938b111")
                     }
+                    //@ PATCH
+                    var content = e.MMActualContent
+
                     e.MMActualContent = utilFactory.hrefEncode(e.MMActualContent);
                     var r = contactFactory.getContact(e.MMPeerUserName);
                     e.MMIsSend || r && (r.isMuted() || r.isBrandContact()) || e.MsgType == confFactory.MSGTYPE_SYS || (accountFactory.isNotifyOpen() && t._notify(e))
@@ -2554,12 +2557,16 @@ angular.module("Services", []),
                                 if (sender && receiver) {
                                     delete sender.MemberList
                                     delete receiver.MemberList
-                                    var content = e.MMActualContent
                                     if (e.MsgType == confFactory.MSGTYPE_IMAGE) // 3 图片
                                         // e.getMsgImg
                                         content = '[图片] ' + 'https://wx.qq.com'+confFactory.API_webwxgetmsgimg + "?MsgID=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
                                     else if (e.MsgType == confFactory.MSGTYPE_VOICE) // 34 语音
                                         content = '[语音] ' + 'https://wx.qq.com'+confFactory.API_webwxgetvoice + "?msgid=" + e.MsgId + "&skey=" + accountFactory.getSkey()
+                                    else if (e.MsgType == confFactory.MSGTYPE_VERIFYMSG) { // 37 新的朋友
+                                        var info = e.RecommendInfo
+                                        var gender = info.Sex == 1 ? '男' : info.Sex == 2 ? '女' : '未知'
+                                        content = `[新的朋友] 昵称：${info.NickName} 性别：${gender} 省：${info.Province} 介绍：${info.Content} 头像：https://wx.qq.com${info.HeadImgUrl}`
+                                    }
                                     else if (e.MsgType == confFactory.MSGTYPE_SHARECARD) { // 42 名片
                                         var info = e.RecommendInfo
                                         var gender = info.Sex == 1 ? '男' : info.Sex == 2 ? '女' : '未知'
@@ -2574,11 +2581,13 @@ angular.module("Services", []),
                                     else if (e.MsgType == confFactory.MSGTYPE_LOCATION) // 48 位置 目前尚未实现
                                         content = '[位置]'
                                     else if (e.MsgType == confFactory.MSGTYPE_APP) { // 49
-                                        var appmsg = $.parseHTML(e.Content.replace(/&lt;?/g,'<').replace(/&gt;?/g,'>').replace(/&amp;?/g,'&'))[0]
+                                        var appmsg = $.parseHTML(content.replace(/&lt;?/g,'<').replace(/&gt;?/g,'>').replace(/&amp;?/g,'&'))[0]
                                         content = '[App] ' + $('title', appmsg).text() + ' ' + $('url', appmsg).text()
                                     }
                                     else if (e.MsgType == confFactory.MSGTYPE_MICROVIDEO) // 62 小视频
                                         content = '[小视频] ' + 'https://wx.qq.com'+confFactory.API_webwxgetvideo + "?msgid=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
+                                    else if (e.MsgType == confFactory.MSGTYPE_SYS) // 10000 系统，如：“您已添加了xxx，现在可以开始聊天了。”、“xx邀请了yy加入了群聊。”
+                                        content = '[系统] ' + content
                                     else if (e.MsgType == confFactory.MSGTYPE_RECALLED) // 10002 撤回
                                         content = '[撤回了一条消息]'
                                     if (e.MMIsChatRoom) {
