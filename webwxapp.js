@@ -117,6 +117,7 @@ ws.onmessage = data => {
             } catch (ex) {
                 consoleerror(ex.stack)
             } finally {
+                wechatircd_LocalID = null
                 chatFactory.setCurrentUserName(old)
             }
             break
@@ -2301,7 +2302,7 @@ angular.module("Services", []),
                     msg.MMStatus = confFactory.MSG_SEND_STATUS_FAIL
 
                     //@ PATCH
-                    if (wechatircd_LocalID.has(e.LocalID) && token)
+                    if (seenLocalID.has(msg.LocalID) && token)
                         try {
                             ws.send({token: token,
                                     command: 'send_text_message_fail',
@@ -2547,14 +2548,14 @@ angular.module("Services", []),
                         try {
                             // 服务端通过WebSocket控制网页版发送消息，无需投递到服务端
                             if (seenLocalID.has(e.LocalID))
-                                seenLocalID.delete(e.LocalID)
+                                ;
                             // 非服务端生成
                             else {
                                 var sender = contactFactory.getContact(e.MMActualSender)
-                                sender = Object.assign({}, sender, {DisplayName: sender.RemarkName || sender.getDisplayName()})
                                 var receiver = contactFactory.getContact(e.MMPeerUserName)
-                                receiver = Object.assign({}, receiver, {DisplayName: receiver.RemarkName || receiver.getDisplayName()})
                                 if (sender && receiver) {
+                                    sender = Object.assign({}, sender, {DisplayName: sender.RemarkName || sender.getDisplayName()})
+                                    receiver = Object.assign({}, receiver, {DisplayName: receiver.RemarkName || receiver.getDisplayName()})
                                     delete sender.MemberList
                                     delete receiver.MemberList
                                     if (e.MsgType == confFactory.MSGTYPE_IMAGE) // 3 图片
