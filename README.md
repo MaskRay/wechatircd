@@ -19,7 +19,7 @@ wechatircd类似于bitlbee，在微信网页版和IRC间建起桥梁，可以使
 
 - `openssl req -newkey rsa:2048 -nodes -keyout a.key -x509 -out a.crt -subj '/CN=127.0.0.1'`创建密钥与证书。
 - Chrome访问`chrome://settings/certificates`，导入a.crt，在Authorities标签页选择该证书，Edit->Trust this certificate for identifying websites.
-- Chrome安装Switcheroo Redirector扩展，把<https://res.wx.qq.com/zh_CN/htmledition/v2/js/webwxApp2aeaf2.js>重定向至<https://127.0.0.1:9000/webwxapp.js>。
+- Chrome安装Switcheroo Redirector扩展，把<https://res.wx.qq.com/zh_CN/htmledition/v2/js/webwxApp2c32b4.js>重定向至<https://127.0.0.1:9000/webwxapp.js>。若js更新，该路径会变化。
 - `./wechatircd.py --tls-cert a.crt --tls-key a.key`，会监听127.1:6667的IRC和127.1:9000的HTTPS与WebSocket over TLS
 
 ![](https://maskray.me/static/2016-02-21-wechatircd/run.jpg)
@@ -29,7 +29,7 @@ wechatircd类似于bitlbee，在微信网页版和IRC间建起桥梁，可以使
 如果嫌X.509太麻烦的话可以不用TLS，但Chrome会在console里给出警告。
 
 - 执行`./wechatircd.py`，会监听127.1:6667的IRC和127.1:9000的HTTP与WebSocket，HTTP用于伺服项目根目录下的`webwxapp.js`。
-- 把<https://res.wx.qq.com/zh_CN/htmledition/v2/js/webwxApp2aeaf2.js>重定向至<http://127.0.0.1:9000/webwxapp.js>。
+- 把<https://res.wx.qq.com/zh_CN/htmledition/v2/js/webwxApp2c32b4.js>重定向至<http://127.0.0.1:9000/webwxapp.js>。若js更新，该路径会变化。
 - 把`webwxapp.js`中`var ws = new MyWebSocket('wss://127.0.0.1:9000')`修改成`ws://127.0.0.1:9000`
 
 ### IRC客户端
@@ -78,7 +78,7 @@ Emoji会显示成`<img class="qqemoji qqemoji0" text="[Smile]_web" src="/zh_CN/h
 
 ## JS改动
 
-原始文件`orig/webwxApp2aeaf2.js`在Chrome DevTools里格式化后得到`orig/webwxApp2aeaf2.pretty.js`，可以用`diff -u orig/webwxApp2aeaf2.pretty.js webwxapp.js`查看改动。
+原始文件`orig/webwxApp*.js`在Chrome DevTools里格式化后得到`orig/webwxApp*.pretty.js`，可以用`diff -u orig/webwxApp*.pretty.js webwxapp.js`查看改动。
 
 修改的地方都有`//@`标注，结合diff，方便微信网页版JS更新后重新应用这些修改。增加的代码中大多数地方都用`try catch`保护，出错则`consoleerr(ex.stack)`。原始JS把`console`对象抹掉了……`consoleerr`是我保存的一个副本。
 
@@ -134,7 +134,7 @@ Emoji会显示成`<img class="qqemoji qqemoji0" text="[Smile]_web" src="/zh_CN/h
 
 因此原来打算用UserScript阻止该`<script>`标签的执行，三个时机里`@run-at document-begin`看不到`<body>`；`document-body`时`<body>`可能只部分加载了，旧`<script>`标签已经在加载过程中，添加修改后的`<script>`没法保证在旧`<script>`前执行；`@run-at document-end`则完全迟了。
 
-另外可以在`@run-at document-begin`时`window.stop()`阻断页面加载，然后换血，替换整个`document.documentElement`，先加载自己的小段JS，再加载<https://res.wx.qq.com/zh_CN/htmledition/v2/js/{libs28a2f7,webwxApp2aeaf2}.js>，详见<http://stackoverflow.com/questions/11638509/chrome-extension-remove-script-tags>。我不知道如何控制顺序。另外，两个原有JS的HTTP回应中`Access-Control-Allow-Origin: wx.qq.com`格式不对，浏览器会拒绝XMLHttpRequest加载。
+另外可以在`@run-at document-begin`时`window.stop()`阻断页面加载，然后换血，替换整个`document.documentElement`，先加载自己的小段JS，再加载<https://res.wx.qq.com/zh_CN/htmledition/v2/js/{libs*,webwxApp*}.js>，详见<http://stackoverflow.com/questions/11638509/chrome-extension-remove-script-tags>。我不知道如何控制顺序。另外，两个原有JS的HTTP回应中`Access-Control-Allow-Origin: wx.qq.com`格式不对，浏览器会拒绝XMLHttpRequest加载。
 
 Firefox支持beforescriptexecute事件，可以用UserScript实现劫持、更换`<script>`。
 
