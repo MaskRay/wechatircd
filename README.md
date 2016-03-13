@@ -168,11 +168,30 @@ WeeChat:
 /server add wechat 127.1/6667 -autoconnect
 ```
 
-## 网上搜集的AngularJS控制网页版微信方法
+## 微信数据获取及控制
 
-联系人列表
+自己的帐号
 ```javascript
-angular.element('div[nav-chat-directive]').scope().chatList
+angular.element(document.body).scope().account
+```
+
+所有联系人列表
+```javascript
+angular.element($('#navContact')[0]).scope().allContacts
+```
+
+删除群中成员
+```javascript
+var injector = angular.element(document).injector()
+# 这里获取了chatroomFactory，还可用于获取其他factory、service、controller等
+var chatroomFactory = injector.get('chatroomFactory')
+# 设置其中的`room`与`userToRemove`
+chatroomFactory.delMember(room.UserName, userToRemove.UserName)`
+```
+
+名称中包含`xxx`的最近联系人列表中的群
+```javascript
+angular.element($('span:contains("xxx")')).scope().chatContact
 ```
 
 当前窗口发送消息

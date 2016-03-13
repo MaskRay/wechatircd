@@ -232,7 +232,7 @@ class RegisteredCommands:
     @staticmethod
     def join(client, arg):
         if arg == '0':
-            channels = list(self.channels.values())
+            channels = list(client.channels.values())
             for channel in channels:
                 channel.on_part(client, channel.name)
         else:
