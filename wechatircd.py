@@ -778,11 +778,11 @@ class WeChatRoom(Channel):
             user = client.ensure_wechat_user(member, 0)
             if user:
                 seen.add(user)
-                if owner_uin == member['Uin']:
+                if owner_uin == user.uin:
                     owner = user
                 if user not in self.members:
                     self.on_join(user)
-            elif owner_uin == member['Uin']:
+            elif owner_uin == client.uin:
                 owner = client
         for user in self.members - seen:
             self.on_part(user, self.name)
@@ -922,6 +922,7 @@ class Client:
         self.username2wechat_room = {}  # UserName -> WeChatRoom
         self.nick2wechat_user = {}      # nick -> IRC user or WeChat user (friend or room contact)
         self.username2wechat_user = {}  # UserName -> WeChatUser
+        self.uin = 0
         self.token = None
 
     def enter(self, channel):
@@ -958,7 +959,11 @@ class Client:
     def ensure_wechat_user(self, record, friend):
         assert isinstance(record['UserName'], str)
         assert isinstance(record.get('DisplayName', ''), str)
+        assert isinstance(record.get('Uin', 0), int)
         if record.get('IsSelf'):
+            uin = record.get('Uin', 0)
+            if uin:
+                self.uin = uin
             return None
         if record['UserName'] in self.username2wechat_user:
             user = self.username2wechat_user[record['UserName']]
@@ -1206,6 +1211,7 @@ class WeChatUser:
         self.channels = set()
         self.is_friend = False
         self.record = {}
+        self.uin = 0
         self.update(client, record, friend)
 
     @property
@@ -1215,6 +1221,9 @@ class WeChatUser:
     def update(self, client, record, friend):
         if not self.record or 'RemarkName' in record:
             self.record.update(record)
+            uin = self.record.get('Uin', 0)
+            if uin > 0:
+                self.uin = uin
         old_nick = getattr(self, 'nick', None)
         # items in MemberList do not have 'DisplayName' or 'RemarkName'
         if self.username.startswith('@'):
