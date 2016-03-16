@@ -430,7 +430,7 @@ class WeChatCommands:
         client.ensure_wechat_user(data['record'], 1)
 
     @staticmethod
-    def non_friend(client, data):
+    def room_contact(client, data):
         debug({k: v for k, v in data['record'].items() if k in ['UserName', 'DisplayName', 'NickName', 'IsSelf']})
         client.ensure_wechat_user(data['record'], -1)
 

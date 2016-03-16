@@ -68,7 +68,7 @@ setInterval(() => {
                 var x = contacts[username]
                 if (! x.isSelf() && (! deliveredContact.has(username) || JSON.stringify(x) != JSON.stringify(deliveredContact.get(username)))) {
                     x.DisplayName = x.RemarkName || x.getDisplayName()
-                    var command
+                    var command, update = true
                     if (x.isRoomContact()) {
                         command = 'room'
                         for (var member of x.MemberList) {
@@ -76,23 +76,25 @@ setInterval(() => {
                             if (! y) continue
                             if (y.isSelf())
                                 member.IsSelf = true
-                            else if (! seen.has(u) && (! ((set = deliveredRoomContact.get(u)) instanceof Set) || ! set.has(y))) {
-                                y.DisplayName = y.RemarkName || y.getDisplayName()
+                            else if (! seen.has(u) && (! ((set = deliveredRoomContact.get(u)) instanceof Set) || ! set.has(y.DisplayName))) {
+                                y.DisplayName = y.RemarkName || y.getDisplayName() || member.NickName
                                 if (! set)
                                     set = new Set
-                                ws.send({token: token, command: 'non_friend', record: y})
-                                set.add(y)
+                                ws.send({token: token, command: 'room_contact', record: y})
+                                set.add(y.DisplayName)
                                 deliveredRoomContact.set(u, set)
                             }
                         }
                     } else if (x.isBrandContact() || x.isShieldUser())
-                        continue
+                        update = false
                     else if (x.isContact())
                         command = 'friend'
                     else
-                        command = 'non_friend'
-                    ws.send({token: token, command: command, record: x})
-                    deliveredContact.set(username, x)
+                        command = 'room_contact'
+                    if (update) {
+                        ws.send({token: token, command: command, record: x})
+                        deliveredContact.set(username, Object.assign({}, x))
+                    }
                 }
             }
         } catch (ex) {

@@ -4,7 +4,7 @@ wechatircd类似于bitlbee，在微信网页版和IRC间建起桥梁，可以使
 
 ## 原理
 
-修改微信网页版用的JS，通过WebSocket把信息发送到服务端，服务端兼做IRC服务端，把IRC客户端的命令通过WebSocket传送到网页版JS执行。
+修改微信网页版用的JS，通过WebSocket把信息发送到服务端，服务端兼做IRC服务端，把IRC客户端的命令通过WebSocket传送到网页版JS执行。未实现IRC客户端，因此无法把微信群的消息转发到另一个IRC服务器(打通两个群的bot)。
 
 ## 安装
 
@@ -169,6 +169,9 @@ WeeChat:
 ```
 
 ## 微信数据获取及控制
+
+少量特殊账户的`UserName`不带`@`前缀：`newsapp,fmessage,filehelper,weibo,qqmail,fmessage`等的；一般账户(公众号、服务号、直接联系人、群友)的`UserName`以`@`开头；微信群的`UserName`以`@@`开头。不同session `UserName`会变化。`Uin`应该是唯一id，但微信网页版API多数时候都返回0，隐藏了真实值。
+群的`OwnerUin`字段是群主的`Uin`，但大群用户的`Uin`通常都为0，因此难以对应。
 
 自己的帐号
 ```javascript
