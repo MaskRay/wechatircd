@@ -4,7 +4,7 @@ from aiohttp import web
 from ipdb import set_trace as bp
 from datetime import datetime
 import aiohttp, asyncio, inspect, json, logging.handlers, os, pprint, random, re, \
-    signal, ssl, string, sys, time, traceback, uuid, weakref
+    signal, socket, ssl, string, sys, time, traceback, uuid, weakref
 
 logger = logging.getLogger('wechatircd')
 
@@ -119,6 +119,21 @@ class Web(object):
         self.loop.run_until_complete(self.handler.finish_connections(0))
         self.loop.run_until_complete(self.app.cleanup())
 
+    def send_file(self, token, receiver, filename, body):
+        if token in self.token2ws:
+            ws = self.token2ws[token]
+            try:
+                body = body.decode('latin-1')
+                ws.send_str(json.dumps({
+                    'command': 'send_file',
+                    'receiver': receiver,
+                    'filename': filename,
+                    'body': body,
+                }))
+            except:
+                raise
+                pass
+
     def send_text_message(self, token, receiver, msg):
         if token in self.token2ws:
             ws = self.token2ws[token]
@@ -129,6 +144,18 @@ class Web(object):
                     'message': msg,
                     # @ webwxapp.js /e.ClientMsgId = e.LocalID = e.MsgId = (utilFactory.now() + Math.random().toFixed(3)).replace(".", ""),
                     'local_id': '{}0{:03}'.format(int(time.time()*1000), random.randint(0, 999)),
+                }))
+            except:
+                pass
+
+    def add_friend(self, token, username, message):
+        if token in self.token2ws:
+            ws = self.token2ws[token]
+            try:
+                ws.send_str(json.dumps({
+                    'command': 'add_friend',
+                    'user': username,
+                    'message': message,
                 }))
             except:
                 pass
@@ -356,6 +383,13 @@ class RegisteredCommands:
             client.reply('219 {} {} :End of STATS report', client.nick, query)
 
     @staticmethod
+    def summon(client, nick, msg):
+        if client.has_wechat_user(nick):
+            Web.instance.add_friend(client.token, client.get_wechat_user(nick).username, msg)
+        else:
+            client.err_nologin(nick)
+
+    @staticmethod
     def time(client):
         client.reply('391 {} {} :{}Z', client.nick, client.server.name,
                      datetime.utcnow().isoformat())
@@ -404,7 +438,7 @@ class RegisteredCommands:
         if client.has_wechat_user(target):
             user = client.get_wechat_user(target)
             if user.is_friend:
-                Web.instance.send_text_message(client.token, user.username, msg)
+                user.on_notice_or_privmsg(client, command, msg)
             elif command == 'PRIVMSG':
                 client.err_nosuchnick(target)
         # then IRC nick
@@ -414,16 +448,24 @@ class RegisteredCommands:
                 client.prefix, 'PRIVMSG', target, msg))
         # IRC channel or WeChat chatroom
         elif client.is_in_channel(target):
-            channel = (
-                client
-                .get_channel(target)
-                .on_notice_or_privmsg(client, command, msg)
-            )
+            client.get_channel(target).on_notice_or_privmsg(
+                client, command, msg)
         elif command == 'PRIVMSG':
             client.err_nosuchnick(target)
 
 
 class WeChatCommands:
+    @staticmethod
+    def add_friend_ack(client, data):
+        nick = client.username2wechat_user[data['user']].nick
+        client.reply('342 {} {} :Summoning user to IRC', client.nick, nick)
+
+    @staticmethod
+    def add_friend_nak(client, data):
+        nick = client.username2wechat_user[data['user']].nick
+        client.write(':{} NOTICE {} :{}'.format(
+            client.server.name, '+status', 'failed to summon: {}'.format(nick)))
+
     @staticmethod
     def friend(client, data):
         debug({k: v for k, v in data['record'].items() if k in ['UserName', 'DisplayName', 'NickName', 'IsSelf']})
@@ -806,7 +848,8 @@ class WeChatRoom(Channel):
         return len(self.members) + (1 if self.joined else 0)
 
     def on_notice_or_privmsg(self, client, command, msg):
-        Web.instance.send_text_message(client.token, self.username, msg)
+        if not client.ctcp(self.username, command, msg):
+            Web.instance.send_text_message(client.token, self.username, msg)
 
     def on_invite(self, client, nick):
         if client.has_wechat_user(nick):
@@ -907,7 +950,7 @@ class Client:
     def __init__(self, server, reader, writer, options):
         self.server = server
         self.options = Namespace()
-        for k in ['heartbeat', 'ignore', 'join']:
+        for k in ['heartbeat', 'ignore', 'join', 'dcc_send']:
             setattr(self.options, k, getattr(options, k))
         self.reader = reader
         self.writer = writer
@@ -1078,6 +1121,9 @@ class Client:
     def err_useronchannel(self, nick, channelname):
         self.reply('443 {} {} {} :is already on channel', self.nick, nick, channelname)
 
+    def err_nologin(self, nick):
+        self.reply('444 {} {} :User not logged in', self.nick, nick)
+
     def err_needmoreparams(self, command):
         self.reply('461 {} {} :Not enough parameters', self.nick, command)
 
@@ -1162,6 +1208,39 @@ class Client:
                 if len(y) == 2:
                     args.append(y[1])
             self.handle_command(command, args)
+
+    def ctcp(self, receiver, command, msg):
+        async def download():
+            reader, writer = await asyncio.open_connection(ip, port)
+            body = b''
+            while 1:
+                # TODO timeout
+                buf = await reader.read(size-len(body))
+                if not buf:
+                    break
+                body += buf
+                if len(body) >= size:
+                    break
+            Web.instance.send_file(self.token, receiver, filename, body)
+
+        if command == 'PRIVMSG' and len(msg) > 2 and msg[0] == '\1' and msg[-1] == '\1':
+            # VULNERABILITY
+            try:
+                dcc_, send_, filename, ip, port, size = msg[1:-1].split(' ')
+                ip = socket.gethostbyname(str(int(ip)))
+                size = int(size)
+                assert dcc_ == 'DCC' and send_ == 'SEND'
+                if 0 < size <= self.options.dcc_send:
+                    self.server.loop.create_task(download())
+                else:
+                    self.write(':{} NOTICE {} :{}'.format(self.server.name, '+status',
+                        'DCC SEND: invalid size of {}, (0,{}] is acceptable'.format(
+                            filename, self.options.dcc_send)))
+            except:
+                raise
+                pass
+            return True
+        return False
 
     def on_who_member(self, client, channelname):
         client.reply('352 {} {} {} {} {} {} H :0 {}', client.nick, channelname,
@@ -1262,6 +1341,10 @@ class WeChatUser:
 
     def leave(self, channel):
         self.channels.remove(channel)
+
+    def on_notice_or_privmsg(self, client, command, msg):
+        if not client.ctcp(self.username, command, msg):
+            Web.instance.send_text_message(client.token, self.username, msg)
 
     def on_who_member(self, client, channelname):
         client.reply('352 {} {} {} {} {} {} H :0 {}', client.nick, channelname,
@@ -1407,6 +1490,7 @@ def main():
     ap.add_argument('-t', '--tags', action='store_true',
                     help='generate tags for webwxapp.js')
     ap.add_argument('-v', '--verbose', action='store_const', const=logging.DEBUG, dest='loglevel')
+    ap.add_argument('--dcc-send', type=int, default=10*1024*1024, help='size limit receiving from DCC SEND. 0: disable DCC SEND')
     ap.add_argument('--password', help='admin password')
     ap.add_argument('--heartbeat', type=int, default=30, help='time to wait for IRC commands. The server will send PING and close the connection after another timeout of equal duration if no commands is received.')
     ap.add_argument('--web-port', type=int, default=9000, help='HTTP/WebSocket listen port')

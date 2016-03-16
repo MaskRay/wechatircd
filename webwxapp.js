@@ -108,6 +108,109 @@ ws.onmessage = data => {
     try {
         data = JSON.parse(data.detail)
         switch (data.command) {
+        case 'add_friend':
+            $.ajax({
+                method: 'POST',
+                url: confFactory.API_webwxverifyuser+'?r='+utilFactory.now(),
+                dataType: 'json',
+                contentType: 'application/json',
+                data: JSON.stringify(angular.extend(accountFactory.getBaseRequest(), {
+                    Opcode: confFactory.VERIFYUSER_OPCODE_SENDREQUEST,
+                    VerifyUserListSize: 1,
+                    VerifyUserList: [{
+                        Value: data.user,
+                        VerifyUserTicket: ""
+                    }],
+                    VerifyContent: data.message,
+                    SceneListCount: 1,
+                    SceneList: [confFactory.ADDSCENE_PF_WEB],
+                    skey: accountFactory.getSkey()
+                }))
+            }).done(() => {
+                consolelog('+ add_friend_ack')
+                ws.send({token: token,
+                        command: 'add_friend_ack',
+                        user: data.user
+                })
+            }).fail(() => {
+                consoleerror('- add_friend_nak')
+                ws.send({token: token,
+                        command: 'add_friend_nak',
+                        user: data.user
+                })
+            })
+            break
+        case 'send_file':
+            var uploadmediarequest = JSON.stringify(Object.assign({}, accountFactory.getBaseRequest(), {
+                ClientMediaId: utilFactory.now(),
+                TotalLen: data.body.length,
+                StartPos: 0,
+                DataLen: data.body.length,
+                MediaType: confFactory.UPLOAD_MEDIA_TYPE_ATTACHMENT,
+            }))
+            var mime = 'application/octet-stream'
+            if (data.filename.endsWith('.bmp'))
+                mime = 'image/bmp'
+            else if (data.filename.endsWith('.gif'))
+                mime = 'image/gif'
+            else if (data.filename.endsWith('.png'))
+                mime = 'image/png'
+            else if (/\.jpe?g/.test(data.filename))
+                mime = 'image/jpeg'
+            var is_image = /^image/.test(mime)
+            var body = new Uint8Array(data.body.length)
+            for (var i = 0; i < data.body.length; i++)
+                body[i] = data.body.charCodeAt(i)
+            var fields = {
+                id: 'WU_FILE_0',
+                name: data.filename,
+                type: mime,
+                lastModifiedDate: ''+new Date,
+                size: data.body.length,
+                mediatype: (is_image ? 'pic' : 'doc'),
+                uploadmediarequest,
+                webwx_data_ticket: utilFactory.getCookie('webwx_data_ticket'),
+                pass_ticket: accountFactory.getPassticket(),
+            }
+            var fd = new FormData
+            for (var i in fields)
+                fd.append(i, fields[i])
+            fd.append('filename', new Blob([body], {type: mime}), data.filename)
+            $.ajax({
+                method: 'POST',
+                url: confFactory.API_webwxuploadmedia+'?f=json',
+                processData: false,
+                contentType: false,
+                data: fd,
+            }).done((res) => {
+                res = JSON.parse(res)
+                if (res.BaseResponse.Ret === 0 && res.MediaId) {
+                    console.log('+ API_webwxuploadmedia done')
+                    var ext = data.filename.match(/\.(\w+)$/)
+                    ext = ext ? ext[1] : ''
+                    var old = chatFactory.getCurrentUserName()
+                    try {
+                        chatFactory.setCurrentUserName(data.receiver)
+                        var m = chatFactory.createMessage({
+                            MsgType: is_image ? confFactory.MSGTYPE_IMAGE : confFactory.MSGTYPE_APP,
+                            FileName: data.filename,
+                            FileSize: body.length,
+                            MMFileId: 'WU_FILE_0',
+                            MMFileExt: ext,
+                            MMUploadProgress: 100,
+                            MMFileStatus: confFactory.MM_SEND_FILE_STATUS_SUCCESS,
+                        })
+                    } finally {
+                        chatFactory.setCurrentUserName(old)
+                    }
+                    m.MediaId = res.MediaId
+                    chatFactory.sendMessage(m)
+                } else
+                    consoleerror('- API_webwxuploadmedia failed')
+            }).fail(() => {
+                consoleerror('- API_webwxuploadmedia failed')
+            })
+            break
         case 'send_text_message':
             var old = chatFactory.getCurrentUserName()
             try {
@@ -8661,9 +8764,12 @@ function() {
 
 //@ PATCH
 var injector = angular.element(document).injector()
+var accountFactory = injector.get('accountFactory')
 var chatFactory = injector.get('chatFactory')
 var chatroomFactory = injector.get('chatroomFactory')
+var confFactory = injector.get('confFactory')
 var contactFactory = injector.get('contactFactory')
+var utilFactory = injector.get('utilFactory')
 var editArea = angular.element('#editArea').scope()
 
 var postTextMessage = chatFactory.postTextMessage
