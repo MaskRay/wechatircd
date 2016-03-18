@@ -49,12 +49,12 @@ class Web(object):
     def remove_ws(self, ws, peername):
         token = self.ws2token.pop(ws)
         del self.token2ws[token]
-        Server.instance.on_wechat_close(token, peername)
+        Server.instance.on_websocket_close(token, peername)
 
     def remove_token(self, token, peername):
         del self.ws2token[self.token2ws[token]]
         del self.token2ws[token]
-        Server.instance.on_wechat_close(token, peername)
+        Server.instance.on_websocket_close(token, peername)
 
     async def handle_webwxapp_js(self, request):
         with open(os.path.join(os.path.dirname(__file__), 'webwxapp.js'), 'rb') as f:
@@ -65,7 +65,7 @@ class Web(object):
     async def handle_web_socket(self, request):
         ws = web.WebSocketResponse()
         peername = request.transport.get_extra_info('peername')
-        info('WebSocket connected to %r', peername)
+        info('WebSocket client connected from %r', peername)
         await ws.prepare(request)
         async for msg in ws:
             if msg.tp == web.MsgType.text:
@@ -82,11 +82,10 @@ class Web(object):
                             self.remove_token(token, peername)
                         self.ws2token[ws] = token
                         self.token2ws[token] = ws
-                        Server.instance.on_wechat_open(token, peername)
-                    Server.instance.on_wechat(data)
-                except AssertionError as e:
-                    # info('WebSocket %r', e)
-                    raise
+                        Server.instance.on_websocket_open(token, peername)
+                    Server.instance.on_websocket(data)
+                except AssertionError:
+                    info('WebSocket client error')
                     break
                 except:
                     raise
@@ -97,7 +96,7 @@ class Web(object):
                     break
             elif msg.tp == web.MsgType.close:
                 break
-        info('WebSocket disconnected from %r', peername)
+        info('WebSocket client disconnected from %r', peername)
         if ws in self.ws2token:
             self.remove_ws(ws, peername)
         return ws
@@ -131,7 +130,6 @@ class Web(object):
                     'body': body,
                 }))
             except:
-                raise
                 pass
 
     def send_text_message(self, token, receiver, msg):
@@ -414,13 +412,20 @@ class RegisteredCommands:
         client.reply('315 {} {} :End of WHO list', client.nick, target)
 
     @staticmethod
-    def whois(client, target):
+    def whois(client, *args):
+        if not args:
+            client.err_nonicknamegiven()
+            return
+        elif len(args) == 1:
+            target = args[0]
+        else:
+            target = args[1]
         if client.has_wechat_user(target):
             client.get_wechat_user(target).on_whois(client)
         elif client.server.has_nick(target):
             client.server.get_nick(target).on_whois(client)
         else:
-            client.err_nosuchserver(target)
+            client.err_nosuchnick(target)
             return
         client.reply('318 {} {} :End of WHOIS list', client.nick, target)
 
@@ -463,8 +468,7 @@ class WeChatCommands:
     @staticmethod
     def add_friend_nak(client, data):
         nick = client.username2wechat_user[data['user']].nick
-        client.write(':{} NOTICE {} :{}'.format(
-            client.server.name, '+status', 'failed to summon: {}'.format(nick)))
+        client.status('Friend request to {} failed'.format(nick))
 
     @staticmethod
     def friend(client, data):
@@ -489,16 +493,16 @@ class WeChatCommands:
         # receiver is a WeChat chatroom
         if data.get('room', None):
             client.ensure_wechat_room(data['room']) \
-                .on_wechat_message(data)
+                .on_websocket_message(data)
         # receiver is a WeChat user
         else:
             user = client.ensure_wechat_user(data['receiver' if data['type'] == 'send' else 'sender'], 0)
             if user:
-                user.on_wechat_message(data)
+                user.on_websocket_message(data)
 
     @staticmethod
     def send_text_message_fail(client, data):
-        client.write(':{} NOTICE {} :{}'.format(client.server.name, '+status', 'failed: {}'.format(data['message'])))
+        client.notice('Text message failed: {}'.format(data['message']))
 
 ### Channels: StandardChannel, StatusChannel, WeChatRoom
 
@@ -553,6 +557,7 @@ class Channel:
             self.event(user, 'PART', self.name)
 
     def on_invite(self, client, nick):
+        # TODO
         client.err_chanoprivsneeded(self.name)
 
     # subclasses should return True if succeeded to join
@@ -922,7 +927,7 @@ class WeChatRoom(Channel):
         for member in members:
             member.on_who_member(client, self.name)
 
-    def on_wechat_message(self, data):
+    def on_websocket_message(self, data):
         msg = data['message']
         if self.idle:
             self.idle = False
@@ -1054,6 +1059,7 @@ class Client:
             channel.on_part(self, None)
 
     def reply(self, msg, *args):
+        '''Respond to the client's request'''
         self.write((':{} '+msg).format(self.server.name, *args))
 
     def write(self, msg):
@@ -1061,6 +1067,10 @@ class Client:
             self.writer.write(msg.encode()+b'\n')
         except:
             pass
+
+    def status(self, msg):
+        '''A status message from the server'''
+        self.write(':{} NOTICE {} :{}'.format(self.server.name, self.server.name, msg))
 
     @property
     def prefix(self):
@@ -1223,8 +1233,14 @@ class Client:
                     break
             Web.instance.send_file(self.token, receiver, filename, body)
 
+        async def download_wrap():
+            try:
+                await asyncio.wait_for(download(), self.options.dcc_send_download_timeout)
+            except asyncio.TimeoutError:
+                self.status('Downloading of DCC SEND timeout')
+
         if command == 'PRIVMSG' and len(msg) > 2 and msg[0] == '\1' and msg[-1] == '\1':
-            # VULNERABILITY
+            # VULNERABILITY used as proxy
             try:
                 dcc_, send_, filename, ip, port, size = msg[1:-1].split(' ')
                 ip = socket.gethostbyname(str(int(ip)))
@@ -1233,11 +1249,9 @@ class Client:
                 if 0 < size <= self.options.dcc_send:
                     self.server.loop.create_task(download())
                 else:
-                    self.write(':{} NOTICE {} :{}'.format(self.server.name, '+status',
-                        'DCC SEND: invalid size of {}, (0,{}] is acceptable'.format(
-                            filename, self.options.dcc_send)))
+                    self.status('DCC SEND: invalid size of {}, (0,{}] is acceptable'.format(
+                            filename, self.options.dcc_send))
             except:
-                raise
                 pass
             return True
         return False
@@ -1254,21 +1268,20 @@ class Client:
                      ' '.join(name for name in
                               client.channels.keys() & self.channels.keys()))
 
-    def on_wechat(self, data):
+    def on_websocket(self, data):
         command = data['command']
         if type(WeChatCommands.__dict__.get(command)) == staticmethod:
             getattr(WeChatCommands, command)(self, data)
 
-    def on_wechat_open(self, peername):
+    def on_websocket_open(self, peername):
         status = StatusChannel.instance
-        status.event(status, 'NOTICE',
-                     '{} :WeChat connected to {}', status.name, peername)
+        self.status('WebSocket client connected from {}'.format(peername))
 
-    def on_wechat_close(self, peername):
+    def on_websocket_close(self, peername):
         # PART all WeChat chatrooms, these chatrooms will be garbage collected
         for room in self.username2wechat_room.values():
             if room.joined:
-                room.on_part(self, 'WeChat disconnection')
+                room.on_part(self, 'WebSocket client disconnection')
         self.name2wechat_room.clear()
         self.username2wechat_room.clear()
 
@@ -1279,7 +1292,7 @@ class Client:
         status = StatusChannel.instance
         status.shadow_members.get(self, set()).clear()
         if self in status.members:
-            status.on_part(self, 'WeChat disconnected from {}'.format(peername))
+            status.on_part(self, 'WebSocket client disconnected from {}'.format(peername))
             status.on_join(self)
 
 
@@ -1355,7 +1368,7 @@ class WeChatUser:
         client.reply('311 {} {} {} {} * :{}', client.nick, self.nick,
                      self.username, 'WeChat', self.record['NickName'])
 
-    def on_wechat_message(self, data):
+    def on_websocket_message(self, data):
         msg = data['message']
         if data['type'] == 'send':
             self.client.write(':{} PRIVMSG {} :{}'.format(
@@ -1462,18 +1475,18 @@ class Server:
         self.loop.run_until_complete(self.server.wait_closed())
 
     ## WebSocket
-    def on_wechat(self, data):
+    def on_websocket(self, data):
         token = data['token']
         if token in self.tokens:
-            self.tokens[token].on_wechat(data)
+            self.tokens[token].on_websocket(data)
 
-    def on_wechat_open(self, token, peername):
+    def on_websocket_open(self, token, peername):
         if token in self.tokens:
-            self.tokens[token].on_wechat_open(peername)
+            self.tokens[token].on_websocket_open(peername)
 
-    def on_wechat_close(self, token, peername):
+    def on_websocket_close(self, token, peername):
         if token in self.tokens:
-            self.tokens[token].on_wechat_close(peername)
+            self.tokens[token].on_websocket_close(peername)
 
 
 def main():
@@ -1494,8 +1507,8 @@ def main():
     ap.add_argument('--password', help='admin password')
     ap.add_argument('--heartbeat', type=int, default=30, help='time to wait for IRC commands. The server will send PING and close the connection after another timeout of equal duration if no commands is received.')
     ap.add_argument('--web-port', type=int, default=9000, help='HTTP/WebSocket listen port')
-    ap.add_argument('--tls-cert', help='HTTP/WebSocket listen port')
-    ap.add_argument('--tls-key', help='HTTP/WebSocket listen port')
+    ap.add_argument('--tls-cert', help='TLS certificate for HTTPS/WebSocket over TLS')
+    ap.add_argument('--tls-key', help='TLS key for HTTPS/WebSocket over TLS')
     options = ap.parse_args()
 
     # send to syslog if run as a daemon (no controlling terminal)

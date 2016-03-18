@@ -55,15 +55,16 @@ wechatircd是个简单的IRC服务器，可以执行通常的IRC命令，可以�
 
 这些特殊nick与channel只有当前客户端能看到，因此一个服务端支持多个微信帐号同时登录，每个用不同的IRC客户端控制。另外，以下命令会有特殊作用：
 
-- 程序默认选项为`--join auto`，收到某个微信群的第一条消息后会自动加入对应的channel，即开始接收该微信群的消息。`/part [channel]`的IRC原义为离开channel，转换为微信代表在当前IRC会话中不再接收该微信群的消息。不用担心，wechatircd并没有主动退出群的功能
+- 程序默认选项为`--join auto`，收到某个微信群的第一条消息后会自动加入对应的channel，即开始接收该微信群的消息。
 - `/dcc send nick/channel filename`，给微信朋友或微信群发图片/文件。参见<https://en.wikipedia.org/wiki/Direct_Client-to-Client#DCC_SEND>
 - `/invite nick [channel]`为邀请微信朋友加入群
-- `/join [channel]`表示继续接收该微信群的消息
+- `/join [channel]`表示开始接收该微信群的消息
 - `/kick nick`，删除群成员。因为网页版数据限制，无法立即获悉成员变动，channel里可能看不到改变，但实际已经生效了
 - `/list`，列出所有微信群
 - `/names`，更新当前群成员列表
+- `/part [channel]`的IRC原义为离开channel，转换为微信代表在当前IRC会话中不再接收该微信群的消息。不用担心，wechatircd并没有主动退出群的功能
 - `/query nick`打开与`$nick`的私聊窗口，与之私聊即为在微信上和他/她/它对话
-- `/summon nick message`，添加朋友，message为验证信息
+- `/summon nick message`，发送添加朋友请求，message为验证信息
 - `/topic topic`为重命名群，因为IRC不支持channel改名，实现方式为会自动退出原名称的channel并加入新名称的channel
 - `/who channel`，查看群成员列表
 
