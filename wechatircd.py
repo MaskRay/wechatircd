@@ -501,8 +501,31 @@ class WeChatCommands:
                 user.on_websocket_message(data)
 
     @staticmethod
-    def send_text_message_fail(client, data):
-        client.notice('Text message failed: {}'.format(data['message']))
+    def send_file_message_nak(client, data):
+        receiver = data['receiver']
+        filename = data['filename']
+        if client.has_wechat_room(receiver):
+            room = client.get_wechat_room(receiver)
+            client.write(':{} PRIVMSG {} :[文件发送失败] {}'.format(
+                client.prefix, room.nick, filename))
+        elif client.has_wechat_user(receiver):
+            user = client.get_wechat_user(receiver)
+            client.write(':{} PRIVMSG {} :[文件发送失败] {}'.format(
+                client.prefix, user.nick, filename))
+
+
+    @staticmethod
+    def send_text_message_nak(client, data):
+        receiver = data['receiver']
+        msg = data['message']
+        if client.has_wechat_room(receiver):
+            room = client.get_wechat_room(receiver)
+            client.write(':{} PRIVMSG {} :[文字发送失败] {}'.format(
+                client.prefix, room.nick, msg))
+        elif client.has_wechat_user(receiver):
+            user = client.get_wechat_user(receiver)
+            client.write(':{} PRIVMSG {} :[文字发送失败] {}'.format(
+                client.prefix, user.nick, msg))
 
 ### Channels: StandardChannel, StatusChannel, WeChatRoom
 

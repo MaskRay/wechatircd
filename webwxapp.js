@@ -204,11 +204,18 @@ ws.onmessage = data => {
                         chatFactory.setCurrentUserName(old)
                     }
                     m.MediaId = res.MediaId
+                    chatFactory.appendMessage(m)
                     chatFactory.sendMessage(m)
                 } else
-                    consoleerror('- API_webwxuploadmedia failed')
+                    ws.send({token: token,
+                            command: 'send_file_message_nak',
+                            receiver: data.receiver,
+                            filename: data.filename})
             }).fail(() => {
-                consoleerror('- API_webwxuploadmedia failed')
+                ws.send({token: token,
+                        command: 'send_file_message_nak',
+                        receiver: data.receiver,
+                        filename: data.filename})
             })
             break
         case 'send_text_message':
@@ -2410,7 +2417,8 @@ angular.module("Services", []),
                     if (seenLocalID.has(msg.LocalID) && token)
                         try {
                             ws.send({token: token,
-                                    command: 'send_text_message_fail',
+                                    command: 'send_text_message_nak',
+                                    receiver: msg.ToUserName,
                                     message: msg.MMActualContent})
                         } catch (ex) {
                             consoleerror(ex.stack)
@@ -2687,8 +2695,12 @@ angular.module("Services", []),
                                     else if (e.MsgType == confFactory.MSGTYPE_LOCATION) // 48 位置 目前尚未实现
                                         content = '[位置]'
                                     else if (e.MsgType == confFactory.MSGTYPE_APP) { // 49
-                                        var appmsg = $.parseHTML(content.replace(/&lt;?/g,'<').replace(/&gt;?/g,'>').replace(/&amp;?/g,'&'))[0]
-                                        content = '[App] ' + $('title', appmsg).text() + ' ' + $('url', appmsg).text()
+                                        if (e.AppMsgType == confFactory.APPMSGTYPE_ATTACH) {
+                                            content = `[文件] filename: ${e.FileName} size: ${e.MMAppMsgFileSize} url: ${e.MMAppMsgDownloadUrl}`
+                                        } else {
+                                            var appmsg = $.parseHTML(content.replace(/&lt;?/g,'<').replace(/&gt;?/g,'>').replace(/&amp;?/g,'&'))[0]
+                                            content = '[App] ' + $('title', appmsg).text() + ' ' + $('url', appmsg).text()
+                                        }
                                     }
                                     else if (e.MsgType == confFactory.MSGTYPE_MICROVIDEO) // 62 小视频
                                         content = '[小视频] ' + 'https://wx.qq.com'+confFactory.API_webwxgetvideo + "?msgid=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
