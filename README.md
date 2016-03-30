@@ -19,7 +19,7 @@ wechatircd类似于bitlbee，在微信网页版和IRC间建起桥梁，可以使
 
 - `openssl req -newkey rsa:2048 -nodes -keyout a.key -x509 -out a.crt -subj '/CN=127.0.0.1'`创建密钥与证书。
 - Chrome访问`chrome://settings/certificates`，导入a.crt，在Authorities标签页选择该证书，Edit->Trust this certificate for identifying websites.
-- Chrome安装Switcheroo Redirector扩展，把<https://res.wx.qq.com/zh_CN/htmledition/v2/js/webwxApp2c32b4.js>重定向至<https://127.0.0.1:9000/webwxapp.js>。若js更新，该路径会变化。
+- Chrome安装Switcheroo Redirector扩展，把<https://res.wx.qq.com/zh_CN/htmledition/v2/js/webwxApp2cbd9c.js>重定向至<https://127.0.0.1:9000/webwxapp.js>。若js更新，该路径会变化。
 - `./wechatircd.py --tls-cert a.crt --tls-key a.key`，会监听127.1:6667的IRC和127.1:9000的HTTPS与WebSocket over TLS
 
 ![](https://maskray.me/static/2016-02-21-wechatircd/run.jpg)
@@ -29,12 +29,12 @@ wechatircd类似于bitlbee，在微信网页版和IRC间建起桥梁，可以使
 如果嫌X.509太麻烦的话可以不用TLS，但Chrome会在console里给出警告。
 
 - 执行`./wechatircd.py`，会监听127.1:6667的IRC和127.1:9000的HTTP与WebSocket，HTTP用于伺服项目根目录下的`webwxapp.js`。
-- 把<https://res.wx.qq.com/zh_CN/htmledition/v2/js/webwxApp2c32b4.js>重定向至<http://127.0.0.1:9000/webwxapp.js>。若js更新，该路径会变化。
-- 把`webwxapp.js`中`var ws = new MyWebSocket('wss://127.0.0.1:9000')`修改成`ws://127.0.0.1:9000`
+- 把<https://res.wx.qq.com/zh_CN/htmledition/v2/js/webwxApp2cbd9c.js>重定向至<http://127.0.0.1:9000/webwxapp.js>。若js更新，该路径会变化。
+- 把`webwxapp.js` `var ws = new MyWebSocket('wss://127.0.0.1:9000')`行单引号里面的部分修改成`ws://127.0.0.1:9000`
 
 ### IRC客户端
 
-- IRC客户端连接127.1:6667，会自动加入`+status` channel，并给出UUID Version 1的token
+- IRC客户端连接127.1:6667(weechat的话使用`/server add wechat 127.1/6667`)，会自动加入`+status` channel，并给出UUID Version 1的token
 - 登录<https://wx.qq.com>，对“文件传输助手”(filehelper)或其他人/群(还是不要骚扰别人吧)发这个token
 - 回到IRC客户端，可以看到微信朋友加入了`+status` channel，在这个channel发信并不会群发，只是为了方便查看有哪些朋友。
 - 微信朋友的nick优先选取备注名(`RemarkName`)，其次为`DisplayName`(原始JS根据昵称等自动填写的一个名字)
@@ -152,6 +152,8 @@ Firefox支持beforescriptexecute事件，可以用UserScript实现劫持、更�
 DevTools console里查看`token`变量
 
 ## 我的配置
+
+<https://wiki.archlinux.org/index.php/Systemd/User>
 
 `~/.config/systemd/user/wechatircd.service`:
 ```

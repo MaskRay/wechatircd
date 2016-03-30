@@ -2651,8 +2651,7 @@ angular.module("Services", []),
 
                     e.MMActualContent = utilFactory.hrefEncode(e.MMActualContent);
                     var r = contactFactory.getContact(e.MMPeerUserName);
-                    e.MMIsSend || r && (r.isMuted() || r.isBrandContact()) || e.MsgType == confFactory.MSGTYPE_SYS || (accountFactory.isNotifyOpen() && t._notify(e))
-                    //@ MOVE 声音提醒的代码移动至底部，若消息成功发送到服务端则不提醒
+                    //@ MOVE 声音提醒、桌面提醒的代码移动至底部，若消息成功发送到服务端则不提醒
                     t.addChatMessage(e),
                     t.addChatList([e])
 
@@ -2733,6 +2732,7 @@ angular.module("Services", []),
                         }
 
                     if (e.MMUnread) {
+                        e.MMIsSend || r && (r.isMuted() || r.isBrandContact()) || e.MsgType == confFactory.MSGTYPE_SYS || (accountFactory.isNotifyOpen() && t._notify(e))
                         !o || o.isMuted() || o.isSelf() || o.isShieldUser() || o.isBrandContact() || titleRemind.increaseUnreadMsgNum()
                         accountFactory.isSoundOpen() && utilFactory.initMsgNoticePlayer(confFactory.RES_SOUND_RECEIVE_MSG)
                     }
@@ -3364,7 +3364,7 @@ angular.module("Services", []),
         r = r[0].toLowerCase() + "_" + (r[1] || "").toUpperCase();
         var a = {
             LANG: r,
-            EMOTICON_REG: 'img\\sclass="(qq)?emoji (qq)?emoji([\\da-f]*?)"\\s[^<>]*\\s?',
+            EMOTICON_REG: 'img\\sclass="(qq)?emoji (qq)?emoji([\\da-f]*?)"\\s(text="[^<>\\s]*")?\\s?src="[^<>\\s]*"\\s*',
             RES_PATH: "/zh_CN/htmledition/v2/",
             API_jsLogin: "https://login." + t + "/jslogin?appid=wx782c26e4c19acffb&redirect_uri=" + encodeURIComponent(location.protocol + "//" + location.host + "/cgi-bin/mmwebwx-bin/webwxnewloginpage") + "&fun=new&lang=" + r,
             API_login: "https://login." + t + "/cgi-bin/mmwebwx-bin/login",
@@ -8767,9 +8767,11 @@ function() {
         })
     }
     ]);
-    var p = angular.bootstrap.toString()
-      , h = m(p);
-    "54c6b762ad3618c9ebfd4b439c8d4bda" !== h && $.getScript("https://tajs.qq.com/stats?sId=54802481"),
+    try {
+        var p = angular.bootstrap.toString()
+          , h = m(p);
+        "54c6b762ad3618c9ebfd4b439c8d4bda" !== h && $.getScript("https://tajs.qq.com/stats?sId=54802481")
+    } catch (M) {}
     angular.bootstrap(document, ["webwxApp"])
 }();
 

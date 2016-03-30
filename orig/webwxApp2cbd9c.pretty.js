@@ -3016,7 +3016,7 @@ angular.module("Services", []),
         r = r[0].toLowerCase() + "_" + (r[1] || "").toUpperCase();
         var a = {
             LANG: r,
-            EMOTICON_REG: 'img\\sclass="(qq)?emoji (qq)?emoji([\\da-f]*?)"\\s[^<>]*\\s?',
+            EMOTICON_REG: 'img\\sclass="(qq)?emoji (qq)?emoji([\\da-f]*?)"\\s(text="[^<>\\s]*")?\\s?src="[^<>\\s]*"\\s*',
             RES_PATH: "/zh_CN/htmledition/v2/",
             API_jsLogin: "https://login." + t + "/jslogin?appid=wx782c26e4c19acffb&redirect_uri=" + encodeURIComponent(location.protocol + "//" + location.host + "/cgi-bin/mmwebwx-bin/webwxnewloginpage") + "&fun=new&lang=" + r,
             API_login: "https://login." + t + "/cgi-bin/mmwebwx-bin/login",
@@ -8419,8 +8419,10 @@ function() {
         })
     }
     ]);
-    var p = angular.bootstrap.toString()
-      , h = m(p);
-    "54c6b762ad3618c9ebfd4b439c8d4bda" !== h && $.getScript("https://tajs.qq.com/stats?sId=54802481"),
+    try {
+        var p = angular.bootstrap.toString()
+          , h = m(p);
+        "54c6b762ad3618c9ebfd4b439c8d4bda" !== h && $.getScript("https://tajs.qq.com/stats?sId=54802481")
+    } catch (M) {}
     angular.bootstrap(document, ["webwxApp"])
 }();
