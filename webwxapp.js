@@ -2703,7 +2703,7 @@ angular.module("Services", []),
                                     }
                                     else if (e.MsgType == confFactory.MSGTYPE_MICROVIDEO) // 62 小视频
                                         content = '[小视频] ' + 'https://wx.qq.com'+confFactory.API_webwxgetvideo + "?msgid=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
-                                    else if (e.MsgType == confFactory.MSGTYPE_SYS) // 10000 系统，如：“您已添加了xxx，现在可以开始聊天了。”、“xx邀请了yy加入了群聊。”
+                                    else if (e.MsgType == confFactory.MSGTYPE_SYS) // 10000 系统，如：“您已添加了xxx，现在可以开始聊天了。”、“xx邀请了yy加入了群聊。”、“如需将文字消息的语言翻译成系统语言，可以长按消息后选择"翻译"”
                                         content = '[系统] ' + content
                                     else if (e.MsgType == confFactory.MSGTYPE_RECALLED) // 10002 撤回
                                         content = '[撤回了一条消息]'

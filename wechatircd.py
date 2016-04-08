@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from argparse import ArgumentParser, Namespace
 from aiohttp import web
-from ipdb import set_trace as bp
+#from ipdb import set_trace as bp
 from datetime import datetime
 import aiohttp, asyncio, inspect, json, logging.handlers, os, pprint, random, re, \
     signal, socket, ssl, string, sys, time, traceback, uuid, weakref
@@ -40,7 +40,8 @@ class ExceptionHook(object):
 class Web(object):
     instance = None
 
-    def __init__(self):
+    def __init__(self, http_root):
+        self.http_root = http_root
         self.token2ws = {}
         self.ws2token = {}
         assert not Web.instance
@@ -57,7 +58,7 @@ class Web(object):
         Server.instance.on_websocket_close(token, peername)
 
     async def handle_webwxapp_js(self, request):
-        with open(os.path.join(os.path.dirname(__file__), 'webwxapp.js'), 'rb') as f:
+        with open(os.path.join(self.http_root, 'webwxapp.js'), 'rb') as f:
             return web.Response(body=f.read(),
                                 headers={'Content-Type': 'application/javascript; charset=UTF-8',
                                          'Access-Control-Allow-Origin': '*'})
@@ -1523,8 +1524,7 @@ def main():
     ap.add_argument('-p', '--port', type=int, default=6667,
                     help='IRC server listen port')
     ap.add_argument('-q', '--quiet', action='store_const', const=logging.WARN, dest='loglevel')
-    ap.add_argument('-t', '--tags', action='store_true',
-                    help='generate tags for webwxapp.js')
+    ap.add_argument('--http-root', default=os.path.dirname(__file__), help='HTTP root directory (serving webwxapp.js)')
     ap.add_argument('-v', '--verbose', action='store_const', const=logging.DEBUG, dest='loglevel')
     ap.add_argument('--dcc-send', type=int, default=10*1024*1024, help='size limit receiving from DCC SEND. 0: disable DCC SEND')
     ap.add_argument('--password', help='admin password')
@@ -1553,7 +1553,7 @@ def main():
     if options.debug:
         sys.excepthook = ExceptionHook()
     server = Server(options)
-    web = Web()
+    web = Web(options.http_root)
 
     server.start(loop)
     web.start(options.listen, options.web_port, tls, loop)

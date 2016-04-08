@@ -11,6 +11,8 @@ wechatircd类似于bitlbee，在微信网页版和IRC间建起桥梁，可以使
 需要Python 3.5或以上，支持`async/await`语法
 `pip install -r requirements.txt`安装依赖
 
+Arch Linux可以安装`https://aur.archlinux.org/packages/wechatircd-git`，会自动在`/etc/wechatircd/`下生成自签名证书(见下文)，导入浏览器即可。
+
 ## 运行
 
 ### HTTPS、WebSocket over TLS
