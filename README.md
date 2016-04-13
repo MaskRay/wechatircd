@@ -11,7 +11,7 @@ wechatircd类似于bitlbee，在微信网页版和IRC间建起桥梁，可以使
 需要Python 3.5或以上，支持`async/await`语法
 `pip install -r requirements.txt`安装依赖
 
-Arch Linux可以安装`https://aur.archlinux.org/packages/wechatircd-git`，会自动在`/etc/wechatircd/`下生成自签名证书(见下文)，导入浏览器即可。
+Arch Linux可以安装<https://aur.archlinux.org/packages/wechatircd-git>，会自动在`/etc/wechatircd/`下生成自签名证书(见下文)，导入浏览器即可。
 
 ## 运行
 
@@ -19,7 +19,7 @@ Arch Linux可以安装`https://aur.archlinux.org/packages/wechatircd-git`，会�
 
 推荐使用TLS。
 
-- `openssl req -newkey rsa:2048 -nodes -keyout a.key -x509 -out a.crt -subj '/CN=127.0.0.1'`创建密钥与证书。
+- `openssl req -newkey rsa:2048 -nodes -keyout a.key -x509 -out a.crt -subj '/CN=127.0.0.1' -dates 9999`创建密钥与证书。
 - Chrome访问`chrome://settings/certificates`，导入a.crt，在Authorities标签页选择该证书，Edit->Trust this certificate for identifying websites.
 - Chrome安装Switcheroo Redirector扩展，把<https://res.wx.qq.com/zh_CN/htmledition/v2/js/webwxApp2cbd9c.js>重定向至<https://127.0.0.1:9000/webwxapp.js>。若js更新，该路径会变化。
 - `./wechatircd.py --tls-cert a.crt --tls-key a.key`，会监听127.1:6667的IRC和127.1:9000的HTTPS与WebSocket over TLS
@@ -81,7 +81,9 @@ wechatircd是个简单的IRC服务器，可以执行通常的IRC命令，可以�
 - `MSGTYPE_MICROVIDEO`，微视频?，显示`[MicroVideo]`跟URL
 - `MSGTYPE_APP`，订阅号新文章、各种应用分享送红包、URL分享等属于此类，还有子分类`APPMSGTYPE_*`，显示`[App]`跟title跟URL
 
-Emoji会显示成`<img class="qqemoji qqemoji0" text="[Smile]_web" src="/zh_CN/htmledition/v2/images/spacer.gif">`样，发送时用`[Smile]`即可(相当于在网页版文本输入框插入文本后点击发送)
+QQ表情会显示成`<img class="qqemoji qqemoji0" text="[Smile]_web" src="/zh_CN/htmledition/v2/images/spacer.gif">`样，发送时用`[Smile]`即可(相当于在网页版文本输入框插入文本后点击发送)。
+
+Emoji在网页上呈现时为`<img class="emoji emoji1f604" text="_web" src="/zh_CN/htmledition/v2/images/spacer.gif">`，传送至IRC时转换成单个emoji字符。若使用终端IRC客户端，会因为emoji字符宽度为1导致重叠，参见[终端模拟器下使用双倍宽度多色Emoji字体](https://maskray.me/blog/2016-03-13-terminal-emulator-fullwidth-color-emoji)。
 
 ## JS改动
 

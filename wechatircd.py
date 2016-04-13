@@ -959,20 +959,21 @@ class WeChatRoom(Channel):
                 self.client.auto_join(self)
         if not self.joined:
             return
-        if data['type'] == 'send':
-            # server generated messages have been filtered by client-side JS
-            self.client.write(':{} PRIVMSG {} :{}'.format(
-                self.client.prefix, self.name, msg))
-        else:
-            # For chatroom events, sender is the same as receiver, e.g. 你邀请xxx加入了群聊
-            if data['sender'] == self.username:
+        for line in msg.splitlines():
+            if data['type'] == 'send':
+                # server generated messages have been filtered by client-side JS
                 self.client.write(':{} PRIVMSG {} :{}'.format(
-                    self.prefix, self.name, msg))
+                    self.client.prefix, self.name, line))
             else:
-                sender = self.client.ensure_wechat_user(data['sender'], 0)
-                if sender:
+                # For chatroom events, sender is the same as receiver, e.g. 你邀请xxx加入了群聊
+                if data['sender'] == self.username:
                     self.client.write(':{} PRIVMSG {} :{}'.format(
-                        sender.nick, self.name, msg))
+                        self.prefix, self.name, line))
+                else:
+                    sender = self.client.ensure_wechat_user(data['sender'], 0)
+                    if sender:
+                        self.client.write(':{} PRIVMSG {} :{}'.format(
+                            sender.nick, self.name, line))
 
 
 class Client:
@@ -1004,7 +1005,7 @@ class Client:
         del self.channels[irc_lower(channel.name)]
 
     def auto_join(self, room):
-        for regex in self.options.ignore:
+        for regex in self.options.ignore or []:
             if re.search(regex, room.name):
                 break
         else:
@@ -1299,7 +1300,7 @@ class Client:
 
     def on_websocket_open(self, peername):
         status = StatusChannel.instance
-        self.status('WebSocket client connected from {}'.format(peername))
+        #self.status('WebSocket client connected from {}'.format(peername))
 
     def on_websocket_close(self, peername):
         # PART all WeChat chatrooms, these chatrooms will be garbage collected

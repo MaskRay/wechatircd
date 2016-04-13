@@ -2647,7 +2647,9 @@ angular.module("Services", []),
                         e.MMDigest = MM.context("938b111")
                     }
                     //@ PATCH
-                    var content = e.MMActualContent
+                    var content = e.MMActualContent.replace(/<img class="emoji emoji(\w+)"[^>]+>/g, (_, x) =>
+                        emojiFactory.EmojiCodeMap[x] ? String.fromCodePoint(parseInt(x, 16)) : _
+                    )
 
                     e.MMActualContent = utilFactory.hrefEncode(e.MMActualContent);
                     var r = contactFactory.getContact(e.MMPeerUserName);
@@ -8783,6 +8785,7 @@ var chatFactory = injector.get('chatFactory')
 var chatroomFactory = injector.get('chatroomFactory')
 var confFactory = injector.get('confFactory')
 var contactFactory = injector.get('contactFactory')
+var emojiFactory = injector.get('emojiFactory')
 var utilFactory = injector.get('utilFactory')
 var editArea = angular.element('#editArea').scope()
 
