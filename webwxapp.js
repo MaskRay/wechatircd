@@ -2648,7 +2648,7 @@ angular.module("Services", []),
                     }
                     //@ PATCH
                     var content = e.MMActualContent.replace(/<img class="emoji emoji(\w+)"[^>]+>/g, (_, x) =>
-                        emojiFactory.EmojiCodeMap[x] ? String.fromCodePoint(parseInt(x, 16)) : _
+                        String.fromCodePoint(parseInt(x, 16))
                     )
 
                     e.MMActualContent = utilFactory.hrefEncode(e.MMActualContent);
