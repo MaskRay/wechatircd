@@ -714,8 +714,10 @@ class StatusChannel(Channel):
             self.respond(client, 'new [token]  generate new token or use specified token')
             self.respond(client, 'help         display this help')
         elif msg == 'new':
-            client.change_token(uuid.uuid1().hex)
-            self.respond(client, 'new token {} , please paste it to 文件传输助手 on wx.qq.com', client.token)
+            # TODO client.change_token(uuid.uuid1().hex)
+            #self.respond(client, 'new token {} , please paste it to 文件传输助手 on wx.qq.com', client.token)
+            client.change_token('0123456789abcdef0123456789abcdef')
+            self.respond(client, 'Please reload wx.qq.com to see your friend list in this channel', client.token)
         elif msg == 'status':
             self.respond(client, 'Token: {}', client.token)
             self.respond(client, 'IRC channels:')

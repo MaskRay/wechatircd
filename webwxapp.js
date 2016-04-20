@@ -48,7 +48,7 @@ var consolelog = console.log.bind(console)
 var consoleerror = console.error.bind(console)
 var wechatircd_LocalID // 服务端通过WebSocket控制网页版发送消息时指定LocalID，区分网页版上发送的消息(需要投递到服务端)与服务端发送的消息(不需要投递)
 var seenLocalID = new Set() // 记录服务端请求发送的消息的LocalID，避免服务端收到自己发送的消息
-var token
+var token = '0123456789abcdef0123456789abcdef'
 var deliveredContact = new Map()
 var deliveredRoomContact = new Map()
 
