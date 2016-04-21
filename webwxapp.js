@@ -22,6 +22,7 @@ function MyWebSocket(url) {
             dispatch(newEvent('message', event.data))
         }
         ws.onclose = event => {
+            wechatircd_reset()
             if (forcedClose)
                 dispatch(newEvent('close', event.data))
             else
@@ -58,33 +59,49 @@ function wechatircd_reset() {
     deliveredRoomContact.clear()
 }
 
+function send_contact(command, record) {
+    ws.send({token: token, command: command, record: y})
+}
+
+function clean_record(record) {
+    var r = {}
+    for (var key in record)
+        if (key == 'UserName' || key == 'Uin' || key == 'DisplayName' || key == 'NickName' || key == 'IsSelf' || key == 'MemberList')
+            r[key] = record[key]
+    return r
+}
+
 // 同步通讯录
 setInterval(() => {
     if (token)
         try {
             var contacts = contactFactory.getAllContacts()
             var seen = new Set(Object.keys(contacts))
-            for (var username in contacts) {
-                var x = contacts[username]
+            var all = Object.assign({}, contacts, contactFactory.getAllStrangerContacts())
+            for (var username in all) {
+                var x = contactFactory.getContact(username)
                 if (! x.isSelf() && (! deliveredContact.has(username) || JSON.stringify(x) != JSON.stringify(deliveredContact.get(username)))) {
-                    x.DisplayName = x.RemarkName || x.getDisplayName()
-                    var command, update = true
+                    var command, update = true, xx = clean_record(x), members = []
+                    xx.DisplayName = x.RemarkName || x.getDisplayName()
                     if (x.isRoomContact()) {
                         command = 'room'
                         for (var member of x.MemberList) {
                             var u = member.UserName, y = contactFactory.getContact(u), set
                             if (! y) continue
+                            var yy = clean_record(y)
+                            yy.DisplayName = y.RemarkName || y.getDisplayName() || member.NickName
                             if (y.isSelf())
-                                member.IsSelf = true
-                            else if (! seen.has(u) && (! ((set = deliveredRoomContact.get(u)) instanceof Set) || ! set.has(y.DisplayName))) {
-                                y.DisplayName = y.RemarkName || y.getDisplayName() || member.NickName
+                                yy.IsSelf = true
+                            members.push(yy)
+                            if (! y.isSelf() && ! seen.has(u) && (! ((set = deliveredRoomContact.get(u)) instanceof Set) || ! set.has(y.DisplayName))) {
                                 if (! set)
                                     set = new Set
-                                ws.send({token: token, command: 'room_contact', record: y})
-                                set.add(y.DisplayName)
+                                ws.send({token: token, command: y.RemarkName === undefined ? 'room_contact' : 'friend', record: yy})
+                                set.add(yy.DisplayName)
                                 deliveredRoomContact.set(u, set)
                             }
                         }
+                        xx.MemberList = members
                     } else if (x.isBrandContact() || x.isShieldUser())
                         update = false
                     else if (x.isContact())
@@ -92,7 +109,7 @@ setInterval(() => {
                     else
                         command = 'room_contact'
                     if (update) {
-                        ws.send({token: token, command: command, record: x})
+                        ws.send({token: token, command: command, record: xx})
                         deliveredContact.set(username, Object.assign({}, x))
                     }
                 }
@@ -3959,6 +3976,12 @@ angular.module("Services", []),
             getAllContacts: function() {
                 return g
             },
+
+            //@ PATCH
+            getAllStrangerContacts: function() {
+                return m
+            },
+
             getAllStarContact: function(e) {
                 e = e || {};
                 var t;
