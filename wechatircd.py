@@ -649,7 +649,7 @@ class StandardChannel(Channel):
                                      for u, m in self.members.items())))
         client.reply('366 {} {} :End of NAMES list', client.nick, self.name)
 
-    def on_part(self, client, msg):
+    def on_part(self, client, msg=None):
         if client not in self.members:
             client.err_notonchannel(self.name)
             return False
