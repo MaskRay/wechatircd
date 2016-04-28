@@ -785,7 +785,7 @@ class StatusChannel(Channel):
         members.append(client.nick)
         client.reply('353 {} = {} :{}', client.nick, self.name, ' '.join(sorted(members)))
 
-    def on_part(self, member, msg):
+    def on_part(self, member, msg=None):
         if isinstance(member, Client):
             if member not in self.members:
                 member.err_notonchannel(self.name)
@@ -923,7 +923,7 @@ class WeChatRoom(Channel):
                      ' '.join(sorted(members)))
         client.reply('366 {} {} :End of NAMES list', client.nick, self.name)
 
-    def on_part(self, member, msg):
+    def on_part(self, member, msg=None):
         if isinstance(member, Client):
             if not self.joined:
                 member.err_notonchannel(self.name)
