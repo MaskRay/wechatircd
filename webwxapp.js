@@ -2666,7 +2666,7 @@ angular.module("Services", []),
                     //@ PATCH
                     var content = e.MMActualContent.replace(/<img class="emoji emoji(\w+)"[^>]+>/g, (_, x) =>
                         String.fromCodePoint(parseInt(x, 16))
-                    )
+                    ).replace(/<br\/?>/g, '\n')
 
                     e.MMActualContent = utilFactory.hrefEncode(e.MMActualContent);
                     var r = contactFactory.getContact(e.MMPeerUserName);

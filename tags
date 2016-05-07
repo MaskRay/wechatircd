@@ -1,0 +1,196 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Universal Ctags Team	//
+!_TAG_PROGRAM_NAME	Universal Ctags	/Derived from Exuberant Ctags/
+!_TAG_PROGRAM_URL	https://ctags.io/	/official site/
+!_TAG_PROGRAM_VERSION	0.0.0	/91c0d47/
+Channel	wechatircd.py	/^class Channel:$/;"	c	language:Python
+Client	wechatircd.py	/^class Client:$/;"	c	language:Python
+ExceptionHook	wechatircd.py	/^class ExceptionHook(object):$/;"	c	language:Python
+FAQ	README.md	/^## FAQ$/;"	2	language:markdown
+JS改动	README.md	/^## JS改动$/;"	2	language:markdown
+MyWebSocket	webwxapp.js	/^function MyWebSocket(url) {$/;"	c	language:JavaScript
+README.md	README.md	1;"	F	language:markdown
+RegisteredCommands	wechatircd.py	/^class RegisteredCommands:$/;"	c	language:Python
+Server	wechatircd.py	/^class Server:$/;"	c	language:Python
+StandardChannel	wechatircd.py	/^class StandardChannel(Channel):$/;"	c	language:Python
+StatusChannel	wechatircd.py	/^class StatusChannel(Channel):$/;"	c	language:Python
+UnregisteredCommands	wechatircd.py	/^class UnregisteredCommands:$/;"	c	language:Python
+WeChatCommands	wechatircd.py	/^class WeChatCommands:$/;"	c	language:Python
+WeChatRoom	wechatircd.py	/^class WeChatRoom(Channel):$/;"	c	language:Python
+WeChatUser	wechatircd.py	/^class WeChatUser:$/;"	c	language:Python
+Web	wechatircd.py	/^class Web:$/;"	c	language:Python
+__call__	wechatircd.py	/^    def __call__(self, *args, **kwargs):$/;"	m	language:Python	class:ExceptionHook
+__init__	wechatircd.py	/^    def __init__(self):$/;"	m	language:Python	class:Web
+__init__	wechatircd.py	/^    def __init__(self, client, record):$/;"	m	language:Python	class:WeChatRoom
+__init__	wechatircd.py	/^    def __init__(self, client, record):$/;"	m	language:Python	class:WeChatUser
+__init__	wechatircd.py	/^    def __init__(self, name):$/;"	m	language:Python	class:Channel
+__init__	wechatircd.py	/^    def __init__(self, options):$/;"	m	language:Python	class:Server
+__init__	wechatircd.py	/^    def __init__(self, server):$/;"	m	language:Python	class:StatusChannel
+__init__	wechatircd.py	/^    def __init__(self, server, name):$/;"	m	language:Python	class:StandardChannel
+__init__	wechatircd.py	/^    def __init__(self, server, reader, writer):$/;"	m	language:Python	class:Client
+_accept	wechatircd.py	/^    def _accept(self, reader, writer):$/;"	m	language:Python	class:Server
+action	wechatircd.py	/^    def action(self, recipient, source, command, fmt, *args):$/;"	m	language:Python	class:Channel
+add_member	wechatircd.py	/^    def add_member(self, token, roomname, username):$/;"	m	language:Python	class:Web
+away	wechatircd.py	/^    def away(client):$/;"	m	language:Python	class:RegisteredCommands
+bp	wechatircd.py	/^from ipdb import set_trace as bp$/;"	x	language:Python
+change_nick	wechatircd.py	/^    def change_nick(self, client, new):$/;"	m	language:Python	class:Server
+change_token	wechatircd.py	/^    def change_token(self, client, new):$/;"	m	language:Python	class:Server
+change_token	wechatircd.py	/^    def change_token(self, new):$/;"	m	language:Python	class:Client
+consoleerror	webwxapp.js	/^var consoleerror = console.error.bind(console)$/;"	v	language:JavaScript
+consolelog	webwxapp.js	/^var consolelog = console.log.bind(console)$/;"	v	language:JavaScript
+debug	wechatircd.py	/^def debug(msg, *args):$/;"	f	language:Python
+del_member	wechatircd.py	/^    def del_member(self, token, roomname, username):$/;"	m	language:Python	class:Web
+deliveredUserName	webwxapp.js	/^var deliveredUserName = new Map()$/;"	v	language:JavaScript
+disconnect	wechatircd.py	/^    def disconnect(self, quitmsg):$/;"	m	language:Python	class:Client
+done	wechatircd.py	/^        def done(task):$/;"	f	language:Python	function:Server._accept	file:
+ensure_channel	wechatircd.py	/^    def ensure_channel(self, channelname):$/;"	m	language:Python	class:Server
+ensure_wechat_room	wechatircd.py	/^    def ensure_wechat_room(self, record):$/;"	m	language:Python	class:Client
+ensure_wechat_user	wechatircd.py	/^    def ensure_wechat_user(self, record):$/;"	m	language:Python	class:Client
+err_chanoprivsneeded	wechatircd.py	/^    def err_chanoprivsneeded(self, channelname):$/;"	m	language:Python	class:Client
+err_errorneusnickname	wechatircd.py	/^    def err_errorneusnickname(self, nick):$/;"	m	language:Python	class:Client
+err_needmoreparams	wechatircd.py	/^    def err_needmoreparams(self, command):$/;"	m	language:Python	class:Client
+err_nicknameinuse	wechatircd.py	/^    def err_nicknameinuse(self, nick):$/;"	m	language:Python	class:Client
+err_nochanmodes	wechatircd.py	/^    def err_nochanmodes(self, channelname):$/;"	m	language:Python	class:Client
+err_nonicknamegiven	wechatircd.py	/^    def err_nonicknamegiven(self):$/;"	m	language:Python	class:Client
+err_noorigin	wechatircd.py	/^    def err_noorigin(self):$/;"	m	language:Python	class:Client
+err_norecipient	wechatircd.py	/^    def err_norecipient(self, command):$/;"	m	language:Python	class:Client
+err_nosuchchannel	wechatircd.py	/^    def err_nosuchchannel(self, channelname):$/;"	m	language:Python	class:Client
+err_nosuchnick	wechatircd.py	/^    def err_nosuchnick(self, name):$/;"	m	language:Python	class:Client
+err_notexttosend	wechatircd.py	/^    def err_notexttosend(self):$/;"	m	language:Python	class:Client
+err_notonchannel	wechatircd.py	/^    def err_notonchannel(self, channelname):$/;"	m	language:Python	class:Client
+err_umodeunknownflag	wechatircd.py	/^    def err_umodeunknownflag(self):$/;"	m	language:Python	class:Client
+err_unknowncommand	wechatircd.py	/^    def err_unknowncommand(self, command):$/;"	m	language:Python	class:Client
+err_usernotinchannel	wechatircd.py	/^    def err_usernotinchannel(self, nick, channelname):$/;"	m	language:Python	class:Client
+err_useronchannel	wechatircd.py	/^    def err_useronchannel(self, nick, channelname):$/;"	m	language:Python	class:Client
+error	wechatircd.py	/^def error(msg, *args):$/;"	f	language:Python
+get_channel	wechatircd.py	/^    def get_channel(self, channelname):$/;"	m	language:Python	class:Client
+get_nick	wechatircd.py	/^    def get_nick(self, nick):$/;"	m	language:Python	class:Server
+get_wechat_user	wechatircd.py	/^    def get_wechat_user(self, nick):$/;"	m	language:Python	class:Client
+handle_command	wechatircd.py	/^    def handle_command(self, command, args):$/;"	m	language:Python	class:Client
+handle_irc	wechatircd.py	/^    async def handle_irc(self):$/;"	m	language:Python	class:Client
+handle_web_socket	wechatircd.py	/^    async def handle_web_socket(self, request):$/;"	m	language:Python	class:Web
+handle_webwxapp_js	wechatircd.py	/^    async def handle_webwxapp_js(self, request):$/;"	m	language:Python	class:Web
+has_channel	wechatircd.py	/^    def has_channel(self, channelname):$/;"	m	language:Python	class:Server
+has_nick	wechatircd.py	/^    def has_nick(self, nick):$/;"	m	language:Python	class:Server
+has_wechat_user	wechatircd.py	/^    def has_wechat_user(self, nick):$/;"	m	language:Python	class:Client
+info	wechatircd.py	/^def info(msg, *args):$/;"	f	language:Python
+instance	wechatircd.py	/^    instance = None$/;"	v	language:Python	class:ExceptionHook
+instance	wechatircd.py	/^    instance = None$/;"	v	language:Python	class:Server
+instance	wechatircd.py	/^    instance = None$/;"	v	language:Python	class:StatusChannel
+instance	wechatircd.py	/^    instance = None$/;"	v	language:Python	class:Web
+invite	wechatircd.py	/^    def invite(client, nick, channelname):$/;"	m	language:Python	class:RegisteredCommands
+irc_escape	wechatircd.py	/^def irc_escape(s):$/;"	f	language:Python
+irc_lower	wechatircd.py	/^def irc_lower(s):$/;"	f	language:Python
+is_in_channel	wechatircd.py	/^    def is_in_channel(self, name):$/;"	m	language:Python	class:Client
+ison	wechatircd.py	/^    def ison(client, *nicks):$/;"	m	language:Python	class:RegisteredCommands
+join	wechatircd.py	/^    def join(client, arg):$/;"	m	language:Python	class:RegisteredCommands
+kick	wechatircd.py	/^    def kick(client, channelname, nick):$/;"	m	language:Python	class:RegisteredCommands
+log	wechatircd.py	/^    def log(self, client, fmt, *args):$/;"	m	language:Python	class:Channel
+logger	wechatircd.py	/^logger = logging.getLogger('wechatircd')$/;"	v	language:Python
+lusers	wechatircd.py	/^    def lusers(client):$/;"	m	language:Python	class:RegisteredCommands
+main	wechatircd.py	/^def main():$/;"	f	language:Python
+message	wechatircd.py	/^    def message(client, data):$/;"	m	language:Python	class:WeChatCommands
+message_related	wechatircd.py	/^    def message_related(self, include_self, fmt, *args):$/;"	m	language:Python	class:Client
+mod_topic	wechatircd.py	/^    def mod_topic(self, token, roomname, topic):$/;"	m	language:Python	class:Web
+mode	wechatircd.py	/^    def mode(client, target, *args):$/;"	m	language:Python	class:RegisteredCommands
+names	wechatircd.py	/^    def names(client, target):$/;"	m	language:Python	class:RegisteredCommands
+newEvent	webwxapp.js	/^    function newEvent(s, data) {$/;"	f	language:JavaScript	function:MyWebSocket
+nick	wechatircd.py	/^    def nick(client, *args):$/;"	m	language:Python	class:RegisteredCommands
+nick	wechatircd.py	/^    def nick(client, *args):$/;"	m	language:Python	class:UnregisteredCommands
+notice	wechatircd.py	/^    def notice(client, *args):$/;"	m	language:Python	class:RegisteredCommands
+notice_or_privmsg	wechatircd.py	/^    def notice_or_privmsg(cls, client, command, *args):$/;"	m	language:Python	class:RegisteredCommands
+on_event	wechatircd.py	/^    def on_event(self, source, command, fmt, *args):$/;"	m	language:Python	class:StandardChannel
+on_event	wechatircd.py	/^    def on_event(self, source, command, fmt, *args):$/;"	m	language:Python	class:StatusChannel
+on_event	wechatircd.py	/^    def on_event(self, source, command, fmt, *args):$/;"	m	language:Python	class:WeChatRoom
+on_invite	wechatircd.py	/^    def on_invite(self, client, nick):$/;"	m	language:Python	class:Channel
+on_invite	wechatircd.py	/^    def on_invite(self, client, nick):$/;"	m	language:Python	class:WeChatRoom
+on_join	wechatircd.py	/^    def on_join(self, client):$/;"	m	language:Python	class:Channel
+on_join	wechatircd.py	/^    def on_join(self, client):$/;"	m	language:Python	class:StandardChannel
+on_join	wechatircd.py	/^    def on_join(self, client):$/;"	m	language:Python	class:WeChatRoom
+on_join	wechatircd.py	/^    def on_join(self, member):$/;"	m	language:Python	class:StatusChannel
+on_kick	wechatircd.py	/^    def on_kick(self, client, nick):$/;"	m	language:Python	class:Channel
+on_kick	wechatircd.py	/^    def on_kick(self, client, nick):$/;"	m	language:Python	class:WeChatRoom
+on_mode	wechatircd.py	/^    def on_mode(self, client):$/;"	m	language:Python	class:Channel
+on_names	wechatircd.py	/^    def on_names(self, client):$/;"	m	language:Python	class:StandardChannel
+on_names	wechatircd.py	/^    def on_names(self, client):$/;"	m	language:Python	class:StatusChannel
+on_names	wechatircd.py	/^    def on_names(self, client):$/;"	m	language:Python	class:WeChatRoom
+on_notice_or_privmsg	wechatircd.py	/^    def on_notice_or_privmsg(self, client, command, msg):$/;"	m	language:Python	class:StandardChannel
+on_notice_or_privmsg	wechatircd.py	/^    def on_notice_or_privmsg(self, client, command, msg):$/;"	m	language:Python	class:StatusChannel
+on_notice_or_privmsg	wechatircd.py	/^    def on_notice_or_privmsg(self, client, command, msg):$/;"	m	language:Python	class:WeChatRoom
+on_part	wechatircd.py	/^    def on_part(self, client, msg):$/;"	m	language:Python	class:StandardChannel
+on_part	wechatircd.py	/^    def on_part(self, client, msg):$/;"	m	language:Python	class:WeChatRoom
+on_part	wechatircd.py	/^    def on_part(self, member, msg):$/;"	m	language:Python	class:StatusChannel
+on_topic	wechatircd.py	/^    def on_topic(self, client, new=None):$/;"	m	language:Python	class:Channel
+on_topic	wechatircd.py	/^    def on_topic(self, client, new=None):$/;"	m	language:Python	class:StandardChannel
+on_topic	wechatircd.py	/^    def on_topic(self, client, new=None):$/;"	m	language:Python	class:WeChatRoom
+on_wechat	wechatircd.py	/^    def on_wechat(self, data):$/;"	m	language:Python	class:Client
+on_wechat	wechatircd.py	/^    def on_wechat(self, data):$/;"	m	language:Python	class:Server
+on_wechat_close	wechatircd.py	/^    def on_wechat_close(self, peername):$/;"	m	language:Python	class:Client
+on_wechat_close	wechatircd.py	/^    def on_wechat_close(self, token, peername):$/;"	m	language:Python	class:Server
+on_wechat_open	wechatircd.py	/^    def on_wechat_open(self, peername):$/;"	m	language:Python	class:Client
+on_wechat_open	wechatircd.py	/^    def on_wechat_open(self, token, peername):$/;"	m	language:Python	class:Server
+on_who	wechatircd.py	/^    def on_who(self, client):$/;"	m	language:Python	class:StandardChannel
+on_who	wechatircd.py	/^    def on_who(self, client):$/;"	m	language:Python	class:StatusChannel
+on_who	wechatircd.py	/^    def on_who(self, client):$/;"	m	language:Python	class:WeChatRoom
+on_who_member	wechatircd.py	/^    def on_who_member(self, client, channelname):$/;"	m	language:Python	class:Client
+on_who_member	wechatircd.py	/^    def on_who_member(self, client, channelname):$/;"	m	language:Python	class:WeChatUser
+part	wechatircd.py	/^    def part(client, arg, *args):$/;"	m	language:Python	class:RegisteredCommands
+part	wechatircd.py	/^    def part(self, channelname, msg=None):$/;"	m	language:Python	class:Client
+ping	wechatircd.py	/^    def ping(client, *args):$/;"	m	language:Python	class:RegisteredCommands
+pong	wechatircd.py	/^    def pong(client, *args):$/;"	m	language:Python	class:RegisteredCommands
+prefix	wechatircd.py	/^    def prefix(self):$/;"	m	language:Python	class:Client
+prefix	wechatircd.py	/^    def prefix(self):$/;"	m	language:Python	class:StatusChannel
+prefix	wechatircd.py	/^    def prefix(self):$/;"	m	language:Python	class:WeChatUser
+privmsg	wechatircd.py	/^    def privmsg(client, *args):$/;"	m	language:Python	class:RegisteredCommands
+quit	wechatircd.py	/^    def quit(client):$/;"	m	language:Python	class:UnregisteredCommands
+quit	wechatircd.py	/^    def quit(client, *args):$/;"	m	language:Python	class:RegisteredCommands
+remove_channel	wechatircd.py	/^    def remove_channel(self, channel):$/;"	m	language:Python	class:Server
+remove_channel	wechatircd.py	/^    def remove_channel(self, channelname):$/;"	m	language:Python	class:Client
+remove_nick	wechatircd.py	/^    def remove_nick(self, nick):$/;"	m	language:Python	class:Server
+remove_token	wechatircd.py	/^    def remove_token(self, token, peername):$/;"	m	language:Python	class:Web
+remove_wechat_user	wechatircd.py	/^    def remove_wechat_user(self, nick):$/;"	m	language:Python	class:Client
+remove_ws	wechatircd.py	/^    def remove_ws(self, ws, peername):$/;"	m	language:Python	class:Web
+reply	wechatircd.py	/^    def reply(self, msg, *args):$/;"	m	language:Python	class:Client
+respond	wechatircd.py	/^    def respond(self, client, msg, *args):$/;"	m	language:Python	class:StatusChannel
+room	wechatircd.py	/^    def room(client, data):$/;"	m	language:Python	class:WeChatCommands
+rpl_channelmodeis	wechatircd.py	/^    def rpl_channelmodeis(self, channelname, mode):$/;"	m	language:Python	class:Client
+rpl_umodeis	wechatircd.py	/^    def rpl_umodeis(self, mode):$/;"	m	language:Python	class:Client
+seenUserName	webwxapp.js	/^var seenUserName = new Map()$/;"	v	language:JavaScript
+send_text_message	wechatircd.py	/^    def send_text_message(self, token, receiver, msg):$/;"	m	language:Python	class:Web
+send_text_message_fail	wechatircd.py	/^    def send_text_message_fail(client, data):$/;"	m	language:Python	class:WeChatCommands
+start	wechatircd.py	/^    def start(self, host, port, tls, loop):$/;"	m	language:Python	class:Web
+start	wechatircd.py	/^    def start(self, loop):$/;"	m	language:Python	class:Server
+stop	wechatircd.py	/^    def stop(self):$/;"	m	language:Python	class:Server
+stop	wechatircd.py	/^    def stop(self):$/;"	m	language:Python	class:Web
+t	orig/webwxApp2aeaf2.js	/^!function(){var e,t=function(){},o=["assert","clear","count","debug","dir","dirxml","error","exc/;"	f	language:JavaScript
+t	orig/webwxApp2aeaf2.pretty.js	/^    var e, t = function() {}$/;"	f	language:JavaScript
+t	webwxapp.js	/^    var e, t = function() {}$/;"	f	language:JavaScript
+token	webwxapp.js	/^var token$/;"	v	language:JavaScript
+topic	wechatircd.py	/^    def topic(client, channelname, new=None):$/;"	m	language:Python	class:RegisteredCommands
+update	wechatircd.py	/^    def update(self, client, record):$/;"	m	language:Python	class:WeChatRoom
+update	wechatircd.py	/^    def update(self, client, record):$/;"	m	language:Python	class:WeChatUser
+update_members	wechatircd.py	/^    def update_members(self, client, members):$/;"	m	language:Python	class:WeChatRoom
+user	wechatircd.py	/^    def user(client, data):$/;"	m	language:Python	class:WeChatCommands
+user	wechatircd.py	/^    def user(client, user, mode, _, realname):$/;"	m	language:Python	class:UnregisteredCommands
+valid_channelname	wechatircd.py	/^    valid_channelname = re.compile(r"^[#!][^\\x00\\x07\\x0a\\x0d ,:]{0,50}$")$/;"	v	language:Python	class:Server
+valid_nickname	wechatircd.py	/^    valid_nickname = re.compile(r"^[][\\`_^{|}A-Za-z][][\\`_^{|}A-Za-z0-9-]{0,50}$")$/;"	v	language:Python	class:Server
+warning	wechatircd.py	/^def warning(msg, *args):$/;"	f	language:Python
+webwxApp2aeaf2.js	orig/webwxApp2aeaf2.js	1;"	F	language:JavaScript
+webwxApp2aeaf2.pretty.js	orig/webwxApp2aeaf2.pretty.js	1;"	F	language:JavaScript
+webwxapp.js	webwxapp.js	1;"	F	language:JavaScript
+wechatircd	README.md	/^# wechatircd$/;"	1	language:markdown
+wechatircd	webwxapp.js	/^var wechatircd = {}$/;"	v	language:JavaScript
+wechatircd.py	wechatircd.py	1;"	F	language:Python
+wechatircd_reset	webwxapp.js	/^function wechatircd_reset() {$/;"	f	language:JavaScript
+who	wechatircd.py	/^    def who(client, target):$/;"	m	language:Python	class:RegisteredCommands
+write	wechatircd.py	/^    def write(self, msg):$/;"	m	language:Python	class:Client
+ws	webwxapp.js	/^var ws = new MyWebSocket('wss:\/\/127.0.0.1:9000')$/;"	v	language:JavaScript
+为什么采用JS重定向？	README.md	/^### 为什么采用JS重定向？$/;"	3	language:markdown
+原理	README.md	/^## 原理$/;"	2	language:markdown
+参考	README.md	/^## 参考$/;"	2	language:markdown
+安装	README.md	/^## 安装$/;"	2	language:markdown
+查看微信网页版当前采用的token	README.md	/^### 查看微信网页版当前采用的token$/;"	3	language:markdown
+网上搜集的AngularJS控制网页版微信方法	README.md	/^## 网上搜集的AngularJS控制网页版微信方法$/;"	2	language:markdown
+运行	README.md	/^## 运行$/;"	2	language:markdown
+选择这个办法的理由	README.md	/^### 选择这个办法的理由$/;"	3	language:markdown

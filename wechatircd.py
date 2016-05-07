@@ -599,7 +599,7 @@ class Channel:
 
     def on_topic(self, client, new=None):
         if new:
-            client.err_nochanmodes()
+            client.err_nochanmodes(self.name)
         else:
             if self.topic:
                 client.reply('332 {} {} :{}', client.nick, self.name, self.topic)
@@ -944,7 +944,7 @@ class WeChatRoom(Channel):
             if True:  # TODO is owner
                 Web.instance.mod_topic(client.token, self.username, new)
             else:
-                client.err_nochanmodes()
+                client.err_nochanmodes(self.name)
         else:
             super().on_topic(client, new)
 
@@ -1397,12 +1397,13 @@ class WeChatUser:
 
     def on_websocket_message(self, data):
         msg = data['message']
-        if data['type'] == 'send':
-            self.client.write(':{} PRIVMSG {} :{}'.format(
-                self.client.prefix, self.nick, msg))
-        else:
-            self.client.write(':{} PRIVMSG {} :{}'.format(
-                self.prefix, self.client.nick, msg))
+        for line in msg.splitlines():
+            if data['type'] == 'send':
+                self.client.write(':{} PRIVMSG {} :{}'.format(
+                    self.client.prefix, self.nick, line))
+            else:
+                self.client.write(':{} PRIVMSG {} :{}'.format(
+                    self.prefix, self.client.nick, line))
 
 
 class Server:
