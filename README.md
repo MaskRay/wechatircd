@@ -11,13 +11,11 @@ wechatircd类似于bitlbee，在微信网页版和IRC间建起桥梁，可以使
 需要Python 3.5或以上，支持`async/await`语法
 `pip install -r requirements.txt`安装依赖
 
-Arch Linux可以安装<https://aur.archlinux.org/packages/wechatircd-git>，会自动在`/etc/wechatircd/`下生成自签名证书(见下文)，导入浏览器即可。
+### Arch Linux
 
-## 运行
+安装<https://aur.archlinux.org/packages/wechatircd-git>，会自动在`/etc/wechatircd/`下生成自签名证书(见下文)，导入浏览器即可。
 
-### HTTPS、WebSocket over TLS
-
-推荐使用TLS。
+### 其他发行版
 
 - `openssl req -newkey rsa:2048 -nodes -keyout a.key -x509 -out a.crt -subj '/CN=127.0.0.1' -dates 9999`创建密钥与证书。
 - Chrome访问`chrome://settings/certificates`，导入a.crt，在Authorities标签页选择该证书，Edit->Trust this certificate for identifying websites.
@@ -26,20 +24,19 @@ Arch Linux可以安装<https://aur.archlinux.org/packages/wechatircd-git>，会�
 
 ![](https://maskray.me/static/2016-02-21-wechatircd/run.jpg)
 
-### HTTP、WebSocket
-
 如果嫌X.509太麻烦的话可以不用TLS，但Chrome会在console里给出警告。
 
 - 执行`./wechatircd.py`，会监听127.1:6667的IRC和127.1:9000的HTTP与WebSocket，HTTP用于伺服项目根目录下的`webwxapp.js`。
 - 把<https://res.wx.qq.com/zh_CN/htmledition/v2/js/webwxApp2cbd9c.js>重定向至<http://127.0.0.1:9000/webwxapp.js>。若js更新，该路径会变化。
 - 把`webwxapp.js` `var ws = new MyWebSocket('wss://127.0.0.1:9000')`行单引号里面的部分修改成`ws://127.0.0.1:9000`
 
-### IRC客户端
+## 使用
 
-- IRC客户端连接127.1:6667(weechat的话使用`/server add wechat 127.1/6667`)，会自动加入`+status` channel，并给出UUID Version 1的token
-- 登录<https://wx.qq.com>，对“文件传输助手”(filehelper)或其他人/群(还是不要骚扰别人吧)发这个token
-- 回到IRC客户端，可以看到微信朋友加入了`+status` channel，在这个channel发信并不会群发，只是为了方便查看有哪些朋友。
-- 微信朋友的nick优先选取备注名(`RemarkName`)，其次为`DisplayName`(原始JS根据昵称等自动填写的一个名字)
+- 登录<https://wx.qq.com>，会自动发起WebSocket连接。若打开多个，只有第一个生效
+- IRC客户端连接127.1:6667(weechat的话使用`/server add wechat 127.1/6667`)，会自动加入`+status` channel
+
+在`+telegram`发信并不会群发，只是为了方便查看有哪些朋友。
+微信朋友的nick优先选取备注名(`RemarkName`)，其次为`DisplayName`(原始JS根据昵称等自动填写的一个名字)
 
 在`+status` channel可以执行一些命令：
 
@@ -47,13 +44,9 @@ Arch Linux可以安装<https://aur.archlinux.org/packages/wechatircd-git>，会�
 - `status`，已获取的微信朋友、群列表
 - `eval $password $expr`: 如果运行时带上了`--password $password`选项，这里可以eval，方便调试，比如`eval $password client.wechat_users`
 
-
-如果微信网页版显示QR code要求重新登录，登录后继续对“文件传输助手”32个十六进制数字的token即可。
-服务端或客户端重启，根据`+status` channel上新的token(或者在`+status` channel发送`new`消息重新获取一个)，在微信网页版上对“文件传输助手”输入token。
-
 ## IRC命令
 
-wechatircd是个简单的IRC服务器，可以执行通常的IRC命令，可以对其他客户端私聊，创建standard channel(以`#`开头的channel)。另外若用token与某个微信网页版连接的，就能看到微信联系人(朋友、群联系人)显示为特殊nick、微信群显示为特殊channel(以`&`开头，根据群名自动设置名称)
+wechatircd是个简单的IRC服务器，可以执行通常的IRC命令，可以对其他客户端私聊，创建standard channel(以`#`开头的channel)。另外若与微信网页版连接，就能看到微信联系人(朋友、群联系人)显示为特殊nick、微信群显示为特殊channel(以`&`开头，根据群名自动设置名称)
 
 这些特殊nick与channel只有当前客户端能看到，因此一个服务端支持多个微信帐号同时登录，每个用不同的IRC客户端控制。另外，以下命令会有特殊作用：
 
@@ -97,15 +90,11 @@ Emoji在网页上呈现时为`<img class="emoji emoji1f604" text="_web" src="
 
 创建到服务端的WebSocket连接，若`onerror`则自动重连。监听`onmessage`，收到的消息为服务端发来的控制命令：`send_text_message`、`add_member`等。
 
-### 检测输入串是否为32个字符的十六进制数UUID version 1
-
-对“文件传输助手”或其他人发送消息后判断是否为32个字符的十六进制数UUID version 1，是则设置全局变量`token`。
-
 ### 定期把通讯录发送到服务端
 
 获取所有联系人(朋友、订阅号、群)，`deliveredContact`记录投递到服务端的联系人，`deliveredContact`记录同处一群的非直接联系人。
 
-每隔一段时间把未投递过的联系人发送到服务端。如果token发生变化，就会清空`deliveredContact`等。若联系人信息发生变化，也会更新。
+每隔一段时间把未投递过的联系人发送到服务端。
 
 ### 收到微信服务器消息`messageProcess`
 
@@ -150,10 +139,6 @@ Firefox支持beforescriptexecute事件，可以用UserScript实现劫持、更�
 ### 用途
 
 可以使用强大的IRC客户端，方便记录日志(微信日志导出太麻烦<https://maskray.me/blog/2014-10-14-wechat-export>)，可以写bot。
-
-### 查看微信网页版当前采用的token
-
-DevTools console里查看`token`变量
 
 ## 我的配置
 

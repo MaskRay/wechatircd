@@ -42,20 +42,9 @@ class Web(object):
 
     def __init__(self, http_root):
         self.http_root = http_root
-        self.token2ws = {}
-        self.ws2token = {}
+        self.ws = weakref.WeakSet()
         assert not Web.instance
         Web.instance = self
-
-    def remove_ws(self, ws, peername):
-        token = self.ws2token.pop(ws)
-        del self.token2ws[token]
-        Server.instance.on_websocket_close(token, peername)
-
-    def remove_token(self, token, peername):
-        del self.ws2token[self.token2ws[token]]
-        del self.token2ws[token]
-        Server.instance.on_websocket_close(token, peername)
 
     async def handle_webwxapp_js(self, request):
         with open(os.path.join(self.http_root, 'webwxapp.js'), 'rb') as f:
@@ -65,6 +54,7 @@ class Web(object):
 
     async def handle_web_socket(self, request):
         ws = web.WebSocketResponse()
+        self.ws.add(ws)
         peername = request.transport.get_extra_info('peername')
         info('WebSocket client connected from %r', peername)
         await ws.prepare(request)
@@ -72,18 +62,6 @@ class Web(object):
             if msg.tp == web.MsgType.text:
                 try:
                     data = json.loads(msg.data)
-                    token = data['token']
-                    assert isinstance(token, str) and re.match(
-                        r'^[0-9a-f]{32}$', token)
-                    if ws in self.ws2token:
-                        if self.ws2token[ws] != token:
-                            self.remove_ws(ws, peername)
-                    if ws not in self.ws2token:
-                        if token in self.token2ws:
-                            self.remove_token(token, peername)
-                        self.ws2token[ws] = token
-                        self.token2ws[token] = ws
-                        Server.instance.on_websocket_open(token, peername)
                     Server.instance.on_websocket(data)
                 except AssertionError:
                     info('WebSocket client error')
@@ -98,8 +76,6 @@ class Web(object):
             elif msg.tp == web.MsgType.close:
                 break
         info('WebSocket client disconnected from %r', peername)
-        if ws in self.ws2token:
-            self.remove_ws(ws, peername)
         return ws
 
     def start(self, host, port, tls, loop):
@@ -119,9 +95,12 @@ class Web(object):
         self.loop.run_until_complete(self.handler.finish_connections(0))
         self.loop.run_until_complete(self.app.cleanup())
 
-    def send_file(self, token, receiver, filename, body):
-        if token in self.token2ws:
-            ws = self.token2ws[token]
+    def close_connections(self):
+        for ws in self.ws:
+            ws.send_str(json.dumps({'command': 'close'}))
+
+    def send_file(self, receiver, filename, body):
+        for ws in self.ws:
             try:
                 body = body.decode('latin-1')
                 ws.send_str(json.dumps({
@@ -132,10 +111,10 @@ class Web(object):
                 }))
             except:
                 pass
+            break
 
-    def send_text_message(self, token, receiver, msg):
-        if token in self.token2ws:
-            ws = self.token2ws[token]
+    def send_text_message(self, receiver, msg):
+        for ws in self.ws:
             try:
                 ws.send_str(json.dumps({
                     'command': 'send_text_message',
@@ -147,9 +126,8 @@ class Web(object):
             except:
                 pass
 
-    def add_friend(self, token, username, message):
-        if token in self.token2ws:
-            ws = self.token2ws[token]
+    def add_friend(self, username, message):
+        for ws in self.ws:
             try:
                 ws.send_str(json.dumps({
                     'command': 'add_friend',
@@ -158,10 +136,10 @@ class Web(object):
                 }))
             except:
                 pass
+            break
 
-    def add_member(self, token, roomname, username):
-        if token in self.token2ws:
-            ws = self.token2ws[token]
+    def add_member(self, roomname, username):
+        for ws in self.ws:
             try:
                 ws.send_str(json.dumps({
                     'command': 'add_member',
@@ -170,10 +148,10 @@ class Web(object):
                 }))
             except:
                 pass
+            break
 
-    def del_member(self, token, roomname, username):
-        if token in self.token2ws:
-            ws = self.token2ws[token]
+    def del_member(self, roomname, username):
+        for ws in self.ws:
             try:
                 ws.send_str(json.dumps({
                     'command': 'del_member',
@@ -182,10 +160,10 @@ class Web(object):
                 }))
             except:
                 pass
+            break
 
-    def mod_topic(self, token, roomname, topic):
-        if token in self.token2ws:
-            ws = self.token2ws[token]
+    def mod_topic(self, roomname, topic):
+        for ws in self.ws:
             try:
                 ws.send_str(json.dumps({
                     'command': 'mod_topic',
@@ -194,6 +172,7 @@ class Web(object):
                 }))
             except:
                 pass
+            break
 
 ### IRC utilities
 
@@ -384,7 +363,7 @@ class RegisteredCommands:
     @staticmethod
     def summon(client, nick, msg):
         if client.has_wechat_user(nick):
-            Web.instance.add_friend(client.token, client.get_wechat_user(nick).username, msg)
+            Web.instance.add_friend(client.get_wechat_user(nick).username, msg)
         else:
             client.err_nologin(nick)
 
@@ -711,15 +690,10 @@ class StatusChannel(Channel):
             client.err_notonchannel(self.name)
             return
         if msg == 'help':
-            self.respond(client, 'new [token]  generate new token or use specified token')
-            self.respond(client, 'help         display this help')
-        elif msg == 'new':
-            # TODO client.change_token(uuid.uuid1().hex)
-            #self.respond(client, 'new token {} , please paste it to 文件传输助手 on wx.qq.com', client.token)
-            client.change_token('0123456789abcdef0123456789abcdef')
-            self.respond(client, 'Please reload wx.qq.com to see your friend list in this channel', client.token)
+            self.respond(client, 'help            display this help')
+            self.respond(client, 'eval [password] eval')
+            self.respond(client, 'status          channels and users')
         elif msg == 'status':
-            self.respond(client, 'Token: {}', client.token)
             self.respond(client, 'IRC channels:')
             for name, room in client.channels.items():
                 if isinstance(room, StandardChannel):
@@ -736,32 +710,16 @@ class StatusChannel(Channel):
                 if isinstance(room, WeChatRoom):
                     self.respond(client, name)
         else:
-            m = re.match(r'admin (\S+)$', msg.strip())
+            m = re.match(r'eval (\S+) (.+)$', msg.strip())
             if m and m.group(1) == client.server.options.password:
-                self.respond(client, 'Token list:')
-                for token, c in client.server.tokens.items():
-                    self.respond(client, '{}: {}', token, c.prefix)
+                try:
+                    r = pprint.pformat(eval(m.group(2)))
+                except:
+                    r = traceback.format_exc()
+                for line in r.splitlines():
+                    self.respond(client, line)
             else:
-                m = re.match(r'eval (\S+) (.+)$', msg.strip())
-                if m and m.group(1) == client.server.options.password:
-                    try:
-                        r = pprint.pformat(eval(m.group(2)))
-                    except:
-                        r = traceback.format_exc()
-                    for line in r.splitlines():
-                        self.respond(client, line)
-                else:
-                    m = re.match(r'new ([0-9a-f]{32})$', msg.strip())
-                    if m:
-                        token = m.group(1)
-                        if not client.change_token(token):
-                            self.respond(client, 'Token {} has been taken', token)
-                        elif client.token == token:
-                            self.respond(client, 'New token {}', token)
-                        else:
-                            self.respond(client, 'Token {} has been taken', token)
-                    else:
-                        self.respond(client, 'Unknown command {}', msg)
+                self.respond(client, 'Unknown command {}', msg)
 
     def on_join(self, member):
         if isinstance(member, Client):
@@ -880,7 +838,7 @@ class WeChatRoom(Channel):
 
     def on_notice_or_privmsg(self, client, command, msg):
         if not client.ctcp(self.username, command, msg):
-            Web.instance.send_text_message(client.token, self.username, msg)
+            Web.instance.send_text_message(self.username, msg)
 
     def on_invite(self, client, nick):
         if client.has_wechat_user(nick):
@@ -890,7 +848,7 @@ class WeChatRoom(Channel):
             elif not user.is_friend:
                 client.err_nosuchnick(nick)
             else:
-                Web.instance.add_member(client.token, self.username, user.username)
+                Web.instance.add_member(self.username, user.username)
         else:
             client.err_nosuchnick(nick)
 
@@ -911,7 +869,7 @@ class WeChatRoom(Channel):
     def on_kick(self, client, nick, reason):
         if client.has_wechat_user(nick):
             user = client.get_wechat_user(nick)
-            Web.instance.del_member(client.token, self.username, user.username)
+            Web.instance.del_member(self.username, user.username)
         else:
             client.err_usernotinchannel(nick, self.name)
 
@@ -942,7 +900,7 @@ class WeChatRoom(Channel):
     def on_topic(self, client, new=None):
         if new:
             if True:  # TODO is owner
-                Web.instance.mod_topic(client.token, self.username, new)
+                Web.instance.mod_topic(self.username, new)
             else:
                 client.err_nochanmodes(self.name)
         else:
@@ -998,7 +956,6 @@ class Client:
         self.nick2wechat_user = {}      # nick -> IRC user or WeChat user (friend or room contact)
         self.username2wechat_user = {}  # UserName -> WeChatUser
         self.uin = 0
-        self.token = None
 
     def enter(self, channel):
         self.channels[irc_lower(channel.name)] = channel
@@ -1012,9 +969,6 @@ class Client:
                 break
         else:
             room.on_join(self)
-
-    def change_token(self, new):
-        return self.server.change_token(self, new)
 
     def has_wechat_user(self, nick):
         return irc_lower(nick) in self.nick2wechat_user
@@ -1210,7 +1164,8 @@ class Client:
 
                     status_channel = StatusChannel.instance
                     RegisteredCommands.join(self, status_channel.name)
-                    status_channel.on_notice_or_privmsg(self, 'PRIVMSG', 'new')
+                    status_channel.respond(self, 'Visit wx.qq.com and then you will see your friend list in this channel')
+                    Web.instance.close_connections()
 
     async def handle_irc(self):
         sent_ping = False
@@ -1258,7 +1213,7 @@ class Client:
                 body += buf
                 if len(body) >= size:
                     break
-            Web.instance.send_file(self.token, receiver, filename, body)
+            Web.instance.send_file(receiver, filename, body)
 
         async def download_wrap():
             try:
@@ -1384,7 +1339,7 @@ class WeChatUser:
 
     def on_notice_or_privmsg(self, client, command, msg):
         if not client.ctcp(self.username, command, msg):
-            Web.instance.send_text_message(client.token, self.username, msg)
+            Web.instance.send_text_message(self.username, msg)
 
     def on_who_member(self, client, channelname):
         client.reply('352 {} {} {} {} {} {} H :0 {}', client.nick, channelname,
@@ -1419,7 +1374,7 @@ class Server:
         self.channels = {status.name: status}
         self.name = 'wechatircd.maskray.me'
         self.nicks = {}
-        self.tokens = {}
+        self.clients = weakref.WeakSet()
 
         self._boot = datetime.now()
 
@@ -1430,11 +1385,10 @@ class Server:
         def done(task):
             if client.nick:
                 self.remove_nick(client.nick)
-            if client.token:
-                del self.tokens[client.token]
 
         try:
             client = Client(self, reader, writer, self.options)
+            self.clients.add(client)
             task = self.loop.create_task(client.handle_irc())
             task.add_done_callback(done)
         except Exception as e:
@@ -1482,17 +1436,6 @@ class Server:
     def remove_nick(self, nick):
         del self.nicks[irc_lower(nick)]
 
-    def change_token(self, client, new):
-        if client.token == new:
-            return True
-        if new in self.tokens:
-            return False
-        if client.token:
-            self.tokens.pop(client.token)
-        self.tokens[new] = client
-        client.token = new
-        return True
-
     def start(self, loop):
         self.loop = loop
         self.server = loop.run_until_complete(asyncio.streams.start_server(
@@ -1504,17 +1447,8 @@ class Server:
 
     ## WebSocket
     def on_websocket(self, data):
-        token = data['token']
-        if token in self.tokens:
-            self.tokens[token].on_websocket(data)
-
-    def on_websocket_open(self, token, peername):
-        if token in self.tokens:
-            self.tokens[token].on_websocket_open(peername)
-
-    def on_websocket_close(self, token, peername):
-        if token in self.tokens:
-            self.tokens[token].on_websocket_close(peername)
+        for client in self.clients:
+            client.on_websocket(data)
 
 
 def main():
@@ -1542,7 +1476,7 @@ def main():
     try:
         with open('/dev/tty'):
             pass
-        logging.basicConfig(format='%(asctime)s:%(levelname)s: %(message)s')
+        logging.basicConfig(format='%(levelname)s: %(message)s')
     except OSError:
         logging.root.addHandler(logging.handlers.SysLogHandler('/dev/log'))
     logging.root.setLevel(options.loglevel or logging.INFO)

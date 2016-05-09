@@ -49,7 +49,6 @@ var consolelog = console.log.bind(console)
 var consoleerror = console.error.bind(console)
 var wechatircd_LocalID // 服务端通过WebSocket控制网页版发送消息时指定LocalID，区分网页版上发送的消息(需要投递到服务端)与服务端发送的消息(不需要投递)
 var seenLocalID = new Set() // 记录服务端请求发送的消息的LocalID，避免服务端收到自己发送的消息
-var token = '0123456789abcdef0123456789abcdef'
 var deliveredContact = new Map()
 var deliveredRoomContact = new Map()
 
@@ -60,7 +59,7 @@ function wechatircd_reset() {
 }
 
 function send_contact(command, record) {
-    ws.send({token: token, command: command, record: y})
+    ws.send({command: command, record: y})
 }
 
 function clean_record(record) {
@@ -73,50 +72,49 @@ function clean_record(record) {
 
 // 同步通讯录
 setInterval(() => {
-    if (token)
-        try {
-            var contacts = contactFactory.getAllContacts()
-            var seen = new Set(Object.keys(contacts))
-            var all = Object.assign({}, contacts, contactFactory.getAllStrangerContacts())
-            for (var username in all) {
-                var x = contactFactory.getContact(username)
-                if (! x.isSelf() && (! deliveredContact.has(username) || JSON.stringify(x) != JSON.stringify(deliveredContact.get(username)))) {
-                    var command, update = true, xx = clean_record(x), members = []
-                    xx.DisplayName = x.RemarkName || x.getDisplayName()
-                    if (x.isRoomContact()) {
-                        command = 'room'
-                        for (var member of x.MemberList) {
-                            var u = member.UserName, y = contactFactory.getContact(u), set
-                            if (! y) continue
-                            var yy = clean_record(y)
-                            yy.DisplayName = y.RemarkName || y.getDisplayName() || member.NickName
-                            if (y.isSelf())
-                                yy.IsSelf = true
-                            members.push(yy)
-                            if (! y.isSelf() && ! seen.has(u) && (! ((set = deliveredRoomContact.get(u)) instanceof Set) || ! set.has(y.DisplayName))) {
-                                if (! set)
-                                    set = new Set
-                                ws.send({token: token, command: y.RemarkName === undefined ? 'room_contact' : 'friend', record: yy})
-                                set.add(yy.DisplayName)
-                                deliveredRoomContact.set(u, set)
-                            }
+    try {
+        var contacts = contactFactory.getAllContacts()
+        var seen = new Set(Object.keys(contacts))
+        var all = Object.assign({}, contacts, contactFactory.getAllStrangerContacts())
+        for (var username in all) {
+            var x = contactFactory.getContact(username)
+            if (! x.isSelf() && (! deliveredContact.has(username) || JSON.stringify(x) != JSON.stringify(deliveredContact.get(username)))) {
+                var command, update = true, xx = clean_record(x), members = []
+                xx.DisplayName = x.RemarkName || x.getDisplayName()
+                if (x.isRoomContact()) {
+                    command = 'room'
+                    for (var member of x.MemberList) {
+                        var u = member.UserName, y = contactFactory.getContact(u), set
+                        if (! y) continue
+                        var yy = clean_record(y)
+                        yy.DisplayName = y.RemarkName || y.getDisplayName() || member.NickName
+                        if (y.isSelf())
+                            yy.IsSelf = true
+                        members.push(yy)
+                        if (! y.isSelf() && ! seen.has(u) && (! ((set = deliveredRoomContact.get(u)) instanceof Set) || ! set.has(y.DisplayName))) {
+                            if (! set)
+                                set = new Set
+                            ws.send({command: y.RemarkName === undefined ? 'room_contact' : 'friend', record: yy})
+                            set.add(yy.DisplayName)
+                            deliveredRoomContact.set(u, set)
                         }
-                        xx.MemberList = members
-                    } else if (x.isBrandContact() || x.isShieldUser())
-                        update = false
-                    else if (x.isContact())
-                        command = 'friend'
-                    else
-                        command = 'room_contact'
-                    if (update) {
-                        ws.send({token: token, command: command, record: xx})
-                        deliveredContact.set(username, Object.assign({}, x))
                     }
+                    xx.MemberList = members
+                } else if (x.isBrandContact() || x.isShieldUser())
+                    update = false
+                else if (x.isContact())
+                    command = 'friend'
+                else
+                    command = 'room_contact'
+                if (update) {
+                    ws.send({command: command, record: xx})
+                    deliveredContact.set(username, Object.assign({}, x))
                 }
             }
-        } catch (ex) {
-            consoleerror(ex.stack)
         }
+    } catch (ex) {
+        consoleerror(ex.stack)
+    }
 }, 3000)
 
 ws.onopen = wechatircd_reset
@@ -125,6 +123,10 @@ ws.onmessage = data => {
     try {
         data = JSON.parse(data.detail)
         switch (data.command) {
+        case 'close':
+            ws.close()
+            ws.open(false)
+            break
         case 'add_friend':
             $.ajax({
                 method: 'POST',
@@ -145,16 +147,10 @@ ws.onmessage = data => {
                 }))
             }).done(() => {
                 consolelog('+ add_friend_ack')
-                ws.send({token: token,
-                        command: 'add_friend_ack',
-                        user: data.user
-                })
+                ws.send({command: 'add_friend_ack', user: data.user})
             }).fail(() => {
                 consoleerror('- add_friend_nak')
-                ws.send({token: token,
-                        command: 'add_friend_nak',
-                        user: data.user
-                })
+                ws.send({command: 'add_friend_nak', user: data.user})
             })
             break
         case 'send_file':
@@ -224,13 +220,11 @@ ws.onmessage = data => {
                     chatFactory.appendMessage(m)
                     chatFactory.sendMessage(m)
                 } else
-                    ws.send({token: token,
-                            command: 'send_file_message_nak',
+                    ws.send({command: 'send_file_message_nak',
                             receiver: data.receiver,
                             filename: data.filename})
             }).fail(() => {
-                ws.send({token: token,
-                        command: 'send_file_message_nak',
+                ws.send({command: 'send_file_message_nak',
                         receiver: data.receiver,
                         filename: data.filename})
             })
@@ -2431,10 +2425,9 @@ angular.module("Services", []),
                     msg.MMStatus = confFactory.MSG_SEND_STATUS_FAIL
 
                     //@ PATCH
-                    if (seenLocalID.has(msg.LocalID) && token)
+                    if (seenLocalID.has(msg.LocalID))
                         try {
-                            ws.send({token: token,
-                                    command: 'send_text_message_nak',
+                            ws.send({command: 'send_text_message_nak',
                                     receiver: msg.ToUserName,
                                     message: msg.MMActualContent})
                         } catch (ex) {
@@ -2675,80 +2668,77 @@ angular.module("Services", []),
                     t.addChatList([e])
 
                     //@ PATCH
-                    if (token)
-                        try {
-                            // 服务端通过WebSocket控制网页版发送消息，无需投递到服务端
-                            if (seenLocalID.has(e.LocalID))
-                                ;
-                            // 非服务端生成
-                            else {
-                                var sender = contactFactory.getContact(e.MMActualSender)
-                                var receiver = contactFactory.getContact(e.MMPeerUserName)
-                                if (sender && receiver) {
-                                    sender = Object.assign({}, sender, {DisplayName: sender.RemarkName || sender.getDisplayName()})
-                                    receiver = Object.assign({}, receiver, {DisplayName: receiver.RemarkName || receiver.getDisplayName()})
-                                    delete sender.MemberList
-                                    delete receiver.MemberList
-                                    if (e.MsgType == confFactory.MSGTYPE_IMAGE) // 3 图片
-                                        // e.getMsgImg
-                                        content = '[图片] ' + 'https://wx.qq.com'+confFactory.API_webwxgetmsgimg + "?MsgID=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
-                                    else if (e.MsgType == confFactory.MSGTYPE_VOICE) // 34 语音
-                                        content = '[语音] ' + 'https://wx.qq.com'+confFactory.API_webwxgetvoice + "?msgid=" + e.MsgId + "&skey=" + accountFactory.getSkey()
-                                    else if (e.MsgType == confFactory.MSGTYPE_VERIFYMSG) { // 37 新的朋友
-                                        var info = e.RecommendInfo
-                                        var gender = info.Sex == 1 ? '男' : info.Sex == 2 ? '女' : '未知'
-                                        content = `[新的朋友] 昵称：${info.NickName} 性别：${gender} 省：${info.Province} 介绍：${info.Content} 头像：https://wx.qq.com${info.HeadImgUrl}`
-                                    }
-                                    else if (e.MsgType == confFactory.MSGTYPE_SHARECARD) { // 42 名片
-                                        var info = e.RecommendInfo
-                                        var gender = info.Sex == 1 ? '男' : info.Sex == 2 ? '女' : '未知'
-                                        content = `[名片] 昵称：${info.NickName} 性别：${gender} 省：${info.Province} 头像：https://wx.qq.com${info.HeadImgUrl}`
-                                    }
-                                    else if (e.MsgType == confFactory.MSGTYPE_VIDEO) // 43 视频
-                                        // e.getMsgVideo
-                                        content = '[视频] ' + 'https://wx.qq.com'+confFactory.API_webwxgetvideo + "?msgid=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
-                                    else if (e.MsgType == confFactory.MSGTYPE_EMOTICON) // 47 动画表情
-                                        // e.getMsgImg + HTML
-                                        content = '[动画表情] ' + 'https://wx.qq.com'+confFactory.API_webwxgetmsgimg + "?MsgID=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
-                                    else if (e.MsgType == confFactory.MSGTYPE_LOCATION) // 48 位置 目前尚未实现
-                                        content = '[位置]'
-                                    else if (e.MsgType == confFactory.MSGTYPE_APP) { // 49
-                                        if (e.AppMsgType == confFactory.APPMSGTYPE_ATTACH) {
-                                            content = `[文件] filename: ${e.FileName} size: ${e.MMAppMsgFileSize} url: ${e.MMAppMsgDownloadUrl}`
-                                        } else {
-                                            var appmsg = $.parseHTML(content.replace(/&lt;?/g,'<').replace(/&gt;?/g,'>').replace(/&amp;?/g,'&'))[0]
-                                            content = '[App] ' + $('title', appmsg).text() + ' ' + $('url', appmsg).text()
-                                        }
-                                    }
-                                    else if (e.MsgType == confFactory.MSGTYPE_MICROVIDEO) // 62 小视频
-                                        content = '[小视频] ' + 'https://wx.qq.com'+confFactory.API_webwxgetvideo + "?msgid=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
-                                    else if (e.MsgType == confFactory.MSGTYPE_SYS) // 10000 系统，如：“您已添加了xxx，现在可以开始聊天了。”、“xx邀请了yy加入了群聊。”、“如需将文字消息的语言翻译成系统语言，可以长按消息后选择"翻译"”
-                                        content = '[系统] ' + content
-                                    else if (e.MsgType == confFactory.MSGTYPE_RECALLED) // 10002 撤回
-                                        content = '[撤回了一条消息]'
-                                    if (e.MMIsChatRoom) {
-                                        ws.send({token: token,
-                                                command: 'message',
-                                                type: e.MMIsSend ? 'send' : 'receive',
-                                                sender: sender,
-                                                room: receiver,
-                                                message: content})
-                                        // 发送成功(无异常)则标记为已读
-                                        e.MMUnread = false
-                                    } else if (! sender.isBrandContact()) {
-                                        ws.send({token: token,
-                                                command: 'message',
-                                                type: e.MMIsSend ? 'send' : 'receive',
-                                                sender: sender,
-                                                receiver: receiver,
-                                                message: content})
-                                        e.MMUnread = false
+                    try {
+                        // 服务端通过WebSocket控制网页版发送消息，无需投递到服务端
+                        if (seenLocalID.has(e.LocalID))
+                            ;
+                        // 非服务端生成
+                        else {
+                            var sender = contactFactory.getContact(e.MMActualSender)
+                            var receiver = contactFactory.getContact(e.MMPeerUserName)
+                            if (sender && receiver) {
+                                sender = Object.assign({}, sender, {DisplayName: sender.RemarkName || sender.getDisplayName()})
+                                receiver = Object.assign({}, receiver, {DisplayName: receiver.RemarkName || receiver.getDisplayName()})
+                                delete sender.MemberList
+                                delete receiver.MemberList
+                                if (e.MsgType == confFactory.MSGTYPE_IMAGE) // 3 图片
+                                    // e.getMsgImg
+                                    content = '[图片] ' + 'https://wx.qq.com'+confFactory.API_webwxgetmsgimg + "?MsgID=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
+                                else if (e.MsgType == confFactory.MSGTYPE_VOICE) // 34 语音
+                                    content = '[语音] ' + 'https://wx.qq.com'+confFactory.API_webwxgetvoice + "?msgid=" + e.MsgId + "&skey=" + accountFactory.getSkey()
+                                else if (e.MsgType == confFactory.MSGTYPE_VERIFYMSG) { // 37 新的朋友
+                                    var info = e.RecommendInfo
+                                    var gender = info.Sex == 1 ? '男' : info.Sex == 2 ? '女' : '未知'
+                                    content = `[新的朋友] 昵称：${info.NickName} 性别：${gender} 省：${info.Province} 介绍：${info.Content} 头像：https://wx.qq.com${info.HeadImgUrl}`
+                                }
+                                else if (e.MsgType == confFactory.MSGTYPE_SHARECARD) { // 42 名片
+                                    var info = e.RecommendInfo
+                                    var gender = info.Sex == 1 ? '男' : info.Sex == 2 ? '女' : '未知'
+                                    content = `[名片] 昵称：${info.NickName} 性别：${gender} 省：${info.Province} 头像：https://wx.qq.com${info.HeadImgUrl}`
+                                }
+                                else if (e.MsgType == confFactory.MSGTYPE_VIDEO) // 43 视频
+                                    // e.getMsgVideo
+                                    content = '[视频] ' + 'https://wx.qq.com'+confFactory.API_webwxgetvideo + "?msgid=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
+                                else if (e.MsgType == confFactory.MSGTYPE_EMOTICON) // 47 动画表情
+                                    // e.getMsgImg + HTML
+                                    content = '[动画表情] ' + 'https://wx.qq.com'+confFactory.API_webwxgetmsgimg + "?MsgID=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
+                                else if (e.MsgType == confFactory.MSGTYPE_LOCATION) // 48 位置 目前尚未实现
+                                    content = '[位置]'
+                                else if (e.MsgType == confFactory.MSGTYPE_APP) { // 49
+                                    if (e.AppMsgType == confFactory.APPMSGTYPE_ATTACH) {
+                                        content = `[文件] filename: ${e.FileName} size: ${e.MMAppMsgFileSize} url: ${e.MMAppMsgDownloadUrl}`
+                                    } else {
+                                        var appmsg = $.parseHTML(content.replace(/&lt;?/g,'<').replace(/&gt;?/g,'>').replace(/&amp;?/g,'&'))[0]
+                                        content = '[App] ' + $('title', appmsg).text() + ' ' + $('url', appmsg).text()
                                     }
                                 }
+                                else if (e.MsgType == confFactory.MSGTYPE_MICROVIDEO) // 62 小视频
+                                    content = '[小视频] ' + 'https://wx.qq.com'+confFactory.API_webwxgetvideo + "?msgid=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
+                                else if (e.MsgType == confFactory.MSGTYPE_SYS) // 10000 系统，如：“您已添加了xxx，现在可以开始聊天了。”、“xx邀请了yy加入了群聊。”、“如需将文字消息的语言翻译成系统语言，可以长按消息后选择"翻译"”
+                                    content = '[系统] ' + content
+                                else if (e.MsgType == confFactory.MSGTYPE_RECALLED) // 10002 撤回
+                                    content = '[撤回了一条消息]'
+                                if (e.MMIsChatRoom) {
+                                    ws.send({command: 'message',
+                                            type: e.MMIsSend ? 'send' : 'receive',
+                                            sender: sender,
+                                            room: receiver,
+                                            message: content})
+                                    // 发送成功(无异常)则标记为已读
+                                    e.MMUnread = false
+                                } else if (! sender.isBrandContact()) {
+                                    ws.send({command: 'message',
+                                            type: e.MMIsSend ? 'send' : 'receive',
+                                            sender: sender,
+                                            receiver: receiver,
+                                            message: content})
+                                    e.MMUnread = false
+                                }
                             }
-                        } catch (ex) {
-                            consoleerror(ex.stack)
                         }
+                    } catch (ex) {
+                        consoleerror(ex.stack)
+                    }
 
                     if (e.MMUnread) {
                         e.MMIsSend || r && (r.isMuted() || r.isBrandContact()) || e.MsgType == confFactory.MSGTYPE_SYS || (accountFactory.isNotifyOpen() && t._notify(e))
@@ -8811,15 +8801,3 @@ var contactFactory = injector.get('contactFactory')
 var emojiFactory = injector.get('emojiFactory')
 var utilFactory = injector.get('utilFactory')
 var editArea = angular.element('#editArea').scope()
-
-var postTextMessage = chatFactory.postTextMessage
-chatFactory.postTextMessage = function(e) {
-    if (/^\s*([a-f0-9]{32})\s*$/.test(e.MMSendContent)) {
-        var new_token = RegExp.$1
-        if (token !== new_token) {
-            token = new_token
-            wechatircd_reset()
-        }
-    }
-    return postTextMessage.call(this, e)
-}
