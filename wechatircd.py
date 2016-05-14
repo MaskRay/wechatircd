@@ -76,6 +76,8 @@ class Web(object):
             elif msg.tp == web.MsgType.close:
                 break
         info('WebSocket client disconnected from %r', peername)
+        for client in Server.instance.clients:
+            client.on_websocket_close(peername)
         return ws
 
     def start(self, host, port, tls, loop):
