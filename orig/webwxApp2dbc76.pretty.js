@@ -33,7 +33,7 @@ angular.module("Controllers", []),
             }, !0).result
         }
         function b() {
-            var e = k;
+            var e = F;
             e && setTimeout(function() {
                 var t = (e[0].clientHeight - e.find(".ngdialog-content").height()) / 2;
                 e.css("paddingTop", t)
@@ -117,9 +117,9 @@ angular.module("Controllers", []),
             })
         }
         function E() {
-            t.debug && (F && o.cancel(F),
+            t.debug && (k && o.cancel(k),
             C.start(4e4),
-            F = o(function() {
+            k = o(function() {
                 s.syncCheck().then(function(e) {
                     return C.start(5e3),
                     e
@@ -240,15 +240,15 @@ angular.module("Controllers", []),
         t.$on("root:searchList:cleanKeyWord", function() {
             t.keyword = ""
         });
-        var k;
+        var F;
         t.$on("ngDialog.opened", function(e, t) {
             w.change("dialog:open", !0),
-            k = t,
+            F = t,
             b()
         }),
         t.$on("ngDialog.closed", function() {
             w.change("dialog:open", !1),
-            k = null 
+            F = null 
         }),
         $(window).on("resize", function() {
             b()
@@ -312,7 +312,7 @@ angular.module("Controllers", []),
         }
         ,
         C.callback(E);
-        var F
+        var k
     }
     ])
 }(),
@@ -908,12 +908,12 @@ angular.module("Controllers", []),
             e.length > 0 || t ? d.change("sender:hasText", !0) : d.change("sender:hasText", !1)
         }
         function h() {
-            window.getSelection ? (P = window.getSelection(),
-            A = P.getRangeAt(0)) : A = document.selection.createRange()
+            window.getSelection ? (A = window.getSelection(),
+            I = A.getRangeAt(0)) : I = document.selection.createRange()
         }
         function M() {
-            A ? window.getSelection ? (P.removeAllRanges(),
-            P.addRange(A)) : A.select() : y()
+            I ? window.getSelection ? (A.removeAllRanges(),
+            A.addRange(I)) : I.select() : y()
         }
         function y() {
             var e, t;
@@ -949,8 +949,8 @@ angular.module("Controllers", []),
             var o, n;
             if (t || M(),
             window.getSelection) {
-                !t && A ? (o = P,
-                n = A) : (o = window.getSelection(),
+                !t && I ? (o = A,
+                n = I) : (o = window.getSelection(),
                 n = o.getRangeAt(0)),
                 n.deleteContents();
                 var r;
@@ -971,22 +971,22 @@ angular.module("Controllers", []),
                 var l = s.offsetTop - 42 + s.offsetHeight - D.offsetHeight;
                 D.scrollTop < l && (D.scrollTop = l)
             } else
-                n = t || !A ? document.selection.createRange() : A,
+                n = t || !I ? document.selection.createRange() : I,
                 e = e.replace(/</gi, "&lt;").replace(/>/gi, "&gt;"),
                 n.pasteHTML(e),
                 n.select()
         }
         function w() {
-            window.getSelection && (window.getSelection().getRangeAt(0).insertNode(I),
-            k = I.offsetLeft,
-            F = I.offsetTop - D.scrollTop,
-            U.appendChild(I))
+            window.getSelection && (window.getSelection().getRangeAt(0).insertNode(F),
+            k = F.offsetLeft,
+            U = F.offsetTop - D.scrollTop,
+            R.appendChild(F))
         }
         function S(t) {
             var o = r.open({
                 template: "imageUploadPreview.html",
                 controller: ["$scope", function(e) {
-                    x = !0;
+                    O = !0;
                     var o = "";
                     e.src = "",
                     e.send = function() {
@@ -1030,9 +1030,15 @@ angular.module("Controllers", []),
             h())
         }
         function T(e) {
-            return j[e.toLowerCase()]
+            return q[e.toLowerCase()]
         }
-        function E(e, t) {
+        function E(e) {
+            var t = {
+                mp4: 1
+            };
+            return T(e) ? a.MSGTYPE_IMAGE : t[e.toLowerCase()] ? a.MSGTYPE_VIDEO : a.MSGTYPE_APP
+        }
+        function N(e, t) {
             angular.extend(e, {
                 onQueued: K,
                 onProgress: K,
@@ -1040,11 +1046,11 @@ angular.module("Controllers", []),
                 onError: K
             }, t)
         }
-        function N() {
+        function P() {
             require.async(["webuploader"], function(e) {
                 window.WebUploader = e;
                 try {
-                    Y = e.create({
+                    B = e.create({
                         auto: !0,
                         dnd: "#chatArea",
                         paste: u.browser.webkit ? "#chatArea" : void 0,
@@ -1053,37 +1059,129 @@ angular.module("Controllers", []),
                         fileVal: "filename",
                         pick: ".js_fileupload",
                         compress: !1,
-                        duplicate: !0
+                        duplicate: !0,
+                        threads: 1,
+                        chunked: !0,
+                        chunkSize: 524288
                     }).on("beforeFileQueued", function(e) {
-                        if (T(e.ext)) {
-                            if (e.size > 1024 * B * 1024)
-                                return alert(MM.context("8c88ff6") + B + "M"),
-                                !1
-                        } else if (e.size > 1024 * H * 1024)
-                            return alert(MM.context("0c9c48a") + H + "M"),
+                        if (e._checked)
+                            return !0;
+                        if (0 == e.size)
+                            return B.skipFile(e),
+                            alert(MM.context("61e885c")),
                             !1;
-                        /untitled\d+.png/i.test(e.name) ? E(e, W) : E(e, V)
-                    }).on("filesQueued", function(e) {
-                        for (var t = 0, o = e.length; o > t; ++t) {
-                            var n = e[t];
-                            n.onQueued.call(n)
+                        if (e._data = e._data || {},
+                        /untitled\d+.png/i.test(e.name))
+                            N(e, z);
+                        else if (N(e, W),
+                        "gif" !== e.ext.toLowerCase() && !T(e.ext)) {
+                            var n = E(e.ext);
+                            if (n == a.MSGTYPE_VIDEO && e.size >= 1024 * H * 1024)
+                                return B.skipFile(e),
+                                void alert(MM.context("9a7dbbc"));
+                            e.MMSendMsg = s.createMessage({
+                                MsgType: n,
+                                FileName: e.name,
+                                FileSize: e.size,
+                                MMFileId: e.id,
+                                MMFileExt: e.ext,
+                                MMUploadProgress: 0,
+                                MMFileStatus: a.MM_SEND_FILE_STATUS_SENDING,
+                                MMCancelUploadFileFunc: V
+                            }),
+                            s.appendMessage(e.MMSendMsg),
+                            t.$$phase || t.$digest()
                         }
+                        var r = !1;
+                        return e.size > 1024 * j * 1024 && (r = !0),
+                        B.md5File(e).then(function(t) {
+                            function n(e, t, o) {
+                                var n, r = angular.extend(i.getBaseRequest(), {
+                                    ClientMediaId: u.now(),
+                                    TotalLen: e.size,
+                                    StartPos: 0,
+                                    DataLen: e.size,
+                                    MediaType: a.UPLOAD_MEDIA_TYPE_ATTACHMENT,
+                                    FromUserName: c.FromUserName,
+                                    ToUserName: c.ToUserName,
+                                    FileMd5: c.FileMd5,
+                                    AESKey: c.AESKey,
+                                    Signature: c.Signature
+                                }), s = E(e.ext);
+                                switch (s) {
+                                case a.MSGTYPE_IMAGE:
+                                    n = "pic";
+                                    break;
+                                case a.MSGTYPE_VIDEO:
+                                    n = "video";
+                                    break;
+                                default:
+                                    n = "doc"
+                                }
+                                var l = {
+                                    mediatype: n,
+                                    uploadmediarequest: JSON.stringify(angular.extend({
+                                        UploadType: 1
+                                    }, r)),
+                                    webwx_data_ticket: u.getCookie("webwx_data_ticket"),
+                                    pass_ticket: decodeURIComponent(i.getPassticket())
+                                };
+                                e._uploadParams = l,
+                                e._uploadmediarequestBase = r,
+                                t ? (B.trigger("fileQueued", e),
+                                B.trigger("uploadSuccess", e, o),
+                                B.skipFile(e)) : (e._checked = !0,
+                                B.addFiles(e))
+                            }
+                            console.log("md5 result:", t);
+                            var c, l = {
+                                FromUserName: i.getUserName(),
+                                ToUserName: s.getCurrentUserName(),
+                                FileSize: e.size,
+                                FileMd5: t,
+                                FileName: e.name,
+                                FileType: 7
+                            };
+                            if (r) {
+                                var f = angular.extend(l, i.getBaseRequest());
+                                c = angular.extend({}, l),
+                                o({
+                                    method: "POST",
+                                    url: a.API_checkupload,
+                                    data: f
+                                }).success(function(t) {
+                                    0 == t.BaseResponse.Ret ? (c = angular.extend(c, {
+                                        AESKey: t.AESKey,
+                                        Signature: t.Signature
+                                    }),
+                                    e.Signature = t.Signature,
+                                    n(e, t.MediaId, t)) : (e.MMSendMsg.MMFileStatus = a.MM_SEND_FILE_STATUS_FAIL,
+                                    e.MMSendMsg.MMStatus = a.MSG_SEND_STATUS_FAIL,
+                                    alert(t.BaseResponse.ErrMsg))
+                                }).error(function() {
+                                    e.MMSendMsg.MMFileStatus = a.MM_SEND_FILE_STATUS_FAIL,
+                                    e.MMSendMsg.MMStatus = a.MSG_SEND_STATUS_FAIL,
+                                    alert("上传失败")
+                                })
+                            } else
+                                c = angular.extend({}, l),
+                                n(e)
+                        }),
+                        !1
+                    }).on("fileQueued", function(e) {
+                        e.onQueued.call(e)
                     }).on("uploadBeforeSend", function(e, t) {
                         var o = e.file;
-                        t.mediatype = T(o.ext) ? "pic" : "doc",
-                        t.uploadmediarequest = JSON.stringify(angular.extend(i.getBaseRequest(), {
-                            ClientMediaId: u.now(),
-                            TotalLen: o.size,
-                            StartPos: 0,
-                            DataLen: o.size,
-                            MediaType: a.UPLOAD_MEDIA_TYPE_ATTACHMENT
-                        })),
-                        t.webwx_data_ticket = u.getCookie("webwx_data_ticket"),
-                        t.pass_ticket = decodeURIComponent(i.getPassticket())
+                        o._data || {},
+                        angular.extend(t, o._uploadParams, {
+                            uploadmediarequest: JSON.stringify(angular.extend({
+                                UploadType: 2
+                            }, o._uploadmediarequestBase))
+                        })
                     }).on("uploadProgress", function(e, t) {
                         e.onProgress.call(e, t)
                     }).on("uploadFinished", function() {
-                        Y.reset()
+                        B.reset()
                     }).on("uploadSuccess", function(e, t) {
                         e.onSuccess.call(e, t)
                     }).on("uploadError", function(e, t) {
@@ -1094,7 +1192,7 @@ angular.module("Controllers", []),
                             type: e
                         })
                     })
-                } catch (o) {
+                } catch (n) {
                     t.noflash = !0,
                     m.report(m.ReportType.uploaderError, {
                         text: "WebUploader 出错",
@@ -1103,7 +1201,7 @@ angular.module("Controllers", []),
                 }
             })
         }
-        var P, A, I = document.getElementById("caretPosHelper"), k = 0, F = 0, D = document.getElementById("editArea"), U = D.parentNode, R = u.getShareObject("editingContents"), x = !1;
+        var A, I, F = document.getElementById("caretPosHelper"), k = 0, U = 0, D = document.getElementById("editArea"), R = D.parentNode, x = u.getShareObject("editingContents"), O = !1;
         $(D).on("input", function() {
             h()
         }).on("click", function() {
@@ -1112,16 +1210,16 @@ angular.module("Controllers", []),
         t.isDisabled = !t.userName,
         t.isMacOS = navigator.userAgent.toUpperCase().indexOf("MAC OS") > -1,
         t.editAreaCtn = "";
-        var O;
+        var L;
         t.$on("$destroy", function() {
-            O && (R[O] = D.innerHTML)
+            L && (x[L] = D.innerHTML)
         }),
         t.$watch(function() {
             return s.getCurrentUserName()
         }, function(e, t) {
-            t && e != t && (R[t] = D.innerHTML),
-            O = e,
-            b(R[e])
+            t && e != t && (x[t] = D.innerHTML),
+            L = e,
+            b(x[e])
         }),
         t.showEmojiPanel = function(e) {
             f.toggleOpen({
@@ -1156,45 +1254,45 @@ angular.module("Controllers", []),
             }) : "Win64" == navigator.platform && u.browser.msie ? alert(MM.context("82cf63d")) : confirm(MM.context("112a5c0")) && l.install()
         }
         ;
-        var L, G;
+        var G, Y;
         t.editAreaKeyup = function(e) {
             if (MMDEV && e.keyCode == a.KEYCODE_NUM2 && "@" == C(1)) {
                 var o = s.getCurrentUserName();
                 if (!u.isRoomContact(o))
                     return;
                 w(),
-                G = function() {
-                    L = null ,
-                    G = null ;
+                Y = function() {
+                    G = null ,
+                    Y = null ;
                     var e = c.getChatRoomMembersContact(o, "withoutMe");
                     h(),
                     f.open({
                         templateUrl: "editAreaContactPanel.html",
                         controller: "editAreaContactListController",
                         left: k,
-                        top: F,
+                        top: U,
                         scope: {
                             chatRoomUserName: o,
                             memberList: angular.copy(e),
                             insertContactToEditArea: t.insertToEditArea
                         },
                         autoFoucs: !1,
-                        container: angular.element(U)
+                        container: angular.element(R)
                     })
                 }
                 ,
-                !L && G && G(),
-                clearTimeout(L),
-                L = setTimeout(function() {
-                    G && G(),
-                    L = null 
+                !G && Y && Y(),
+                clearTimeout(G),
+                G = setTimeout(function() {
+                    Y && Y(),
+                    G = null 
                 }, 300)
             }
         }
         ,
         t.editAreaKeydown = function(e) {
             if (p(),
-            L)
+            G)
                 return void e.preventDefault();
             var o = e.keyCode;
             if (o == a.KEYCODE_ENTER) {
@@ -1219,7 +1317,7 @@ angular.module("Controllers", []),
         }
         ,
         t.editAreaBlur = function() {
-            G = null ,
+            Y = null ,
             d.change("sender:active", !1)
         }
         ,
@@ -1236,7 +1334,7 @@ angular.module("Controllers", []),
                 });
                 s.appendMessage(e),
                 s.sendMessage(e),
-                R[s.getCurrentUserName()] = "",
+                x[s.getCurrentUserName()] = "",
                 t.editAreaCtn = ""
             }
         }
@@ -1264,52 +1362,58 @@ angular.module("Controllers", []),
         ,
         t.sendGif = function() {}
         ;
-        var Y, B = 10, H = 20, j = {
+        var B, H = 20, j = 25, q = {
             bmp: 1,
             png: 1,
             jpeg: 1,
             jpg: 1,
             gif: 0
-        }, q = function(e) {
-            Y.cancelFile(e.MMFileId),
-            e.MMFileStatus = a.MM_SEND_FILE_STATUS_CANCEL
+        }, V = function(e) {
+            B.cancelFile(e.MMFileId),
+            e.MMFileStatus = a.MM_SEND_FILE_STATUS_CANCEL,
+            e.MMStatus = a.MSG_SEND_STATUS_READY
         }
         , K = function() {}
-        , V = {
+        , W = {
             onQueued: function() {
-                return "gif" == this.ext.toLowerCase() ? (this.MMSendMsg = s.createMessage({
-                    MsgType: a.MSGTYPE_EMOTICON,
-                    EmojiFlag: a.EMOJI_FLAG_GIF
-                }),
-                void function(e) {
-                    Y.makeThumb(e, function(t, o) {
-                        o && (e.MMSendMsg.MMThumbSrc = o),
-                        s.appendMessage(e.MMSendMsg),
-                        console.log(o)
-                    }, 1, 1)
-                }(this)) : (this.MMSendMsg = s.createMessage({
-                    MsgType: T(this.ext) ? a.MSGTYPE_IMAGE : a.MSGTYPE_APP,
-                    FileName: this.name,
-                    FileSize: this.size,
-                    MMFileId: this.id,
-                    MMFileExt: this.ext,
-                    MMUploadProgress: 0,
-                    MMFileStatus: a.MM_SEND_FILE_STATUS_QUEUED,
-                    MMCancelUploadFileFunc: q
-                }),
-                void (T(this.ext) ? !function(t) {
-                    t.MMSendMsg.MMThumbSrc = "",
-                    Y.makeThumb(t, function(o, n) {
-                        (o || !n) && m.report(m.ReportType.uploaderError, {
-                            text: "创建缩略图失败",
-                            fileName: t.MMSendMsg.MMFileExt,
-                            fileSize: t.MMSendMsg.FileSize
-                        }),
-                        n && (t.MMSendMsg.MMThumbSrc = n),
-                        s.appendMessage(t.MMSendMsg),
-                        e.$digest()
-                    })
-                }(this) : s.appendMessage(this.MMSendMsg)))
+                if ("gif" == this.ext.toLowerCase())
+                    return this.MMSendMsg = s.createMessage({
+                        MsgType: a.MSGTYPE_EMOTICON,
+                        EmojiFlag: a.EMOJI_FLAG_GIF
+                    }),
+                    void function(e) {
+                        B.makeThumb(e, function(t, o) {
+                            o && (e.MMSendMsg.MMThumbSrc = o),
+                            s.appendMessage(e.MMSendMsg),
+                            console.log(o)
+                        }, 1, 1)
+                    }(this);
+                if (T(this.ext)) {
+                    var t = E(this.ext);
+                    this.MMSendMsg = s.createMessage({
+                        MsgType: t,
+                        FileName: this.name,
+                        FileSize: this.size,
+                        MMFileId: this.id,
+                        MMFileExt: this.ext,
+                        MMUploadProgress: 0,
+                        MMFileStatus: a.MM_SEND_FILE_STATUS_QUEUED,
+                        MMCancelUploadFileFunc: V
+                    }),
+                    function(t) {
+                        t.MMSendMsg.MMThumbSrc = "",
+                        B.makeThumb(t, function(o, n) {
+                            (o || !n) && m.report(m.ReportType.uploaderError, {
+                                text: "创建缩略图失败",
+                                fileName: t.MMSendMsg.MMFileExt,
+                                fileSize: t.MMSendMsg.FileSize
+                            }),
+                            n && (t.MMSendMsg.MMThumbSrc = n),
+                            s.appendMessage(t.MMSendMsg),
+                            e.$digest()
+                        })
+                    }(this)
+                }
             },
             onProgress: function(e) {
                 var o = this;
@@ -1322,10 +1426,10 @@ angular.module("Controllers", []),
                 if (0 == e.BaseResponse.Ret) {
                     var o = this.MMSendMsg;
                     o.MediaId = e.MediaId,
+                    o.Signature = this.Signature,
                     s.sendMessage(o),
-                    t.$apply(function() {
-                        o.MMFileStatus = a.MM_SEND_FILE_STATUS_SUCCESS
-                    })
+                    o.MMFileStatus = a.MM_SEND_FILE_STATUS_SUCCESS,
+                    t.$$phase || t.$digest()
                 } else
                     this.onError("Ret: " + e.BaseResponse.Ret)
             },
@@ -1342,7 +1446,7 @@ angular.module("Controllers", []),
                     o.MMSendMsg.MMStatus = a.MSG_SEND_STATUS_FAIL
                 })
             }
-        }, W = {
+        }, z = {
             onQueued: function() {
                 var e = s.createMessage({
                     MsgType: a.MSGTYPE_IMAGE,
@@ -1363,8 +1467,8 @@ angular.module("Controllers", []),
                 alert(MM.context("c5795a7") + e)
             }
         };
-        window.WebUploader ? N() : e.$on("root:pageInit:success", function() {
-            N()
+        window.WebUploader ? P() : e.$on("root:pageInit:success", function() {
+            P()
         })
     }
     ])
@@ -1922,6 +2026,7 @@ angular.module("Controllers", []),
             o._offsetTop = void 0,
             o.MMSourceMsgId = e.MsgId,
             o.Content = o.MMActualContent,
+            o.Scene = 2,
             o = i.createMessage(o),
             i.appendMessage(o),
             i.sendMessage(o)
@@ -2039,9 +2144,8 @@ angular.module("Services", []),
                 }).done(function() {
                     window.synccheck && "0" == window.synccheck.retcode ? "0" != window.synccheck.selector ? c.sync().then(function(t) {
                         e.resolve(t)
-                    }, function(t) {
-                        console.log("syncCheck sync nothing", t),
-                        e.reject("sycn net error")
+                    }, function(e) {
+                        console.log("syncCheck sync nothing", e)
                     }) : e.reject(window.synccheck && window.synccheck.selector) : !window.synccheck || "1101" != window.synccheck.retcode && "1102" != window.synccheck.retcode ? window.synccheck && "1100" == window.synccheck.retcode ? r.loginout(0) : (e.reject("syncCheck net error"),
                     i.report(i.ReportType.netError, {
                         text: "syncCheck net error",
@@ -2085,6 +2189,7 @@ angular.module("Services", []),
                 e.ClientMsgId = e.LocalID = e.MsgId = (utilFactory.now() + Math.random().toFixed(3)).replace(".", ""),
                 e.CreateTime = Math.round(utilFactory.now() / 1e3),
                 e.MMStatus = confFactory.MSG_SEND_STATUS_READY,
+                e.sendByLocal = !0,
                 e.MsgType) {
                 case confFactory.MSGTYPE_TEXT:
                     var t = [];
@@ -2119,6 +2224,9 @@ angular.module("Services", []),
                 case confFactory.MSGTYPE_IMAGE:
                     this.postImgMessage(e);
                     break;
+                case confFactory.MSGTYPE_VIDEO:
+                    this.postVideoMessage(e);
+                    break;
                 case confFactory.MSGTYPE_APP:
                     this.postAppMessage(e);
                     break;
@@ -2134,6 +2242,7 @@ angular.module("Services", []),
                 data = angular.extend(accountFactory.getBaseRequest(), {
                     Msg: data
                 }),
+                data.Scene = msg.Scene || 0,
                 utilFactory.browser.msie && parseInt(utilFactory.browser.version) < 9 && url == confFactory.API_webwxsendmsg && (data = eval("'" + JSON.stringify(data) + "'")),
                 mmHttp({
                     method: "POST",
@@ -2177,8 +2286,16 @@ angular.module("Services", []),
                 };
                 this._postMessage(confFactory.API_webwxsendmsgimg + "?fun=async&f=json", t, e)
             },
+            postVideoMessage: function(e) {
+                var t = {
+                    Type: confFactory.MSGTYPE_VIDEO,
+                    MediaId: e.MediaId
+                };
+                this._postMessage(confFactory.API_webwxsendmsgvedio + "?fun=async&f=json", t, e)
+            },
             postAppMessage: function(e) {
                 var t = {
+                    Signature: e.Signature,
                     Type: confFactory.APPMSGTYPE_ATTACH,
                     Content: "<appmsg appid='wxeb7ec651dd0aefa9' sdkver=''><title>" + e.FileName + "</title><des></des><action></action><type>" + confFactory.APPMSGTYPE_ATTACH + "</type><content></content><url></url><lowurl></lowurl><appattach><totallen>" + e.FileSize + "</totallen><attachid>" + e.MediaId + "</attachid><fileext>" + e.MMFileExt + "</fileext></appattach><extinfo></extinfo></appmsg>"
                 };
@@ -2579,7 +2696,7 @@ angular.module("Services", []),
                 t = utilFactory.encodeEmoji(t),
                 t = utilFactory.xml2json(t),
                 e.MMDigest += MM.context("6daeae3"),
-                e.MMFileStatus = confFactory.MM_SEND_FILE_STATUS_SUCCESS,
+                e.MMFileStatus = e.sendByLocal ? confFactory.MM_SEND_FILE_STATUS_SENDING : confFactory.MM_SEND_FILE_STATUS_SUCCESS,
                 e.MMAppMsgFileExt = t.appmsg.appattach.fileext.toLowerCase(),
                 e.MMAppMsgFileSize = utilFactory.getSize(+t.appmsg.appattach.totallen),
                 e.MMAppMsgDownloadUrl = confFactory.API_webwxdownloadmedia + "?sender=" + e.FromUserName + "&mediaid=" + e.MediaId + "&filename=" + encodeURIComponent(e.FileName) + "&fromuser=" + accountFactory.getUin() + "&pass_ticket=" + encodeURIComponent(accountFactory.getPassticket()) + "&webwx_data_ticket=" + encodeURIComponent(utilFactory.getCookie("webwx_data_ticket"))
@@ -2992,34 +3109,30 @@ angular.module("Services", []),
     "use strict";
     angular.module("Services").factory("confFactory", ["$q", function() {
         var e = location.host
-          , t = "weixin.qq.com"
+          , t = "login.weixin.qq.com"
           , o = "file.wx.qq.com"
           , n = "webpush.weixin.qq.com";
-        e.indexOf("wx2.qq.com") > -1 ? (t = "weixin.qq.com",
-        o = "file2.wx.qq.com",
-        n = "webpush2.weixin.qq.com") : e.indexOf("qq.com") > -1 ? (t = "weixin.qq.com",
+        e.indexOf("wx2.qq.com") > -1 ? (t = "login.wx2.qq.com",
+        o = "file.wx2.qq.com",
+        n = "webpush.wx2.qq.com") : e.indexOf("wx8.qq.com") > -1 ? (t = "login.wx8.qq.com",
+        o = "file.wx8.qq.com",
+        n = "webpush.wx8.qq.com") : e.indexOf("qq.com") > -1 ? (t = "login.wx.qq.com",
         o = "file.wx.qq.com",
-        n = "webpush.weixin.qq.com") : e.indexOf("web1.wechat.com") > -1 ? (t = "wechat.com",
-        o = "file1.wechat.com",
-        n = "webpush1.wechat.com") : e.indexOf("web2.wechat.com") > -1 ? (t = "wechat.com",
-        o = "file2.wechat.com",
-        n = "webpush2.wechat.com") : e.indexOf("wechat.com") > -1 ? (t = "wechat.com",
-        o = "file.wechat.com",
-        n = "webpush.wechat.com") : e.indexOf("web1.wechatapp.com") > -1 ? (t = "wechatapp.com",
-        o = "file1.wechatapp.com",
-        n = "webpush1.wechatapp.com") : (t = "wechatapp.com",
-        o = "file.wechatapp.com",
-        n = "webpush.wechatapp.com");
+        n = "webpush.wx.qq.com") : e.indexOf("web2.wechat.com") > -1 ? (t = "login.web2.wechat.com",
+        o = "file.web2.wechat.com",
+        n = "webpush.web2.wechat.com") : e.indexOf("wechat.com") > -1 && (t = "login.web.wechat.com",
+        o = "file.web.wechat.com",
+        n = "webpush.web.wechat.com");
         var r = navigator.language || navigator.browserLanguage;
         r || (r = "zh-cn"),
         r = r.split("-"),
         r = r[0].toLowerCase() + "_" + (r[1] || "").toUpperCase();
         var a = {
             LANG: r,
-            EMOTICON_REG: 'img\\sclass="(qq)?emoji (qq)?emoji([\\da-f]*?)"\\s(text="[^<>\\s]*")?\\s?src="[^<>\\s]*"\\s*',
+            EMOTICON_REG: 'img\\sclass="(qq)?emoji (qq)?emoji([\\da-f]*?)"\\s(text="[^<>(\\s]*")?\\s?src="[^<>(\\s]*"\\s*',
             RES_PATH: "/zh_CN/htmledition/v2/",
-            API_jsLogin: "https://login." + t + "/jslogin?appid=wx782c26e4c19acffb&redirect_uri=" + encodeURIComponent(location.protocol + "//" + location.host + "/cgi-bin/mmwebwx-bin/webwxnewloginpage") + "&fun=new&lang=" + r,
-            API_login: "https://login." + t + "/cgi-bin/mmwebwx-bin/login",
+            API_jsLogin: "https://" + t + "/jslogin?appid=wx782c26e4c19acffb&redirect_uri=" + encodeURIComponent(location.protocol + "//" + location.host + "/cgi-bin/mmwebwx-bin/webwxnewloginpage") + "&fun=new&lang=" + r,
+            API_login: "https://" + t + "/cgi-bin/mmwebwx-bin/login",
             API_synccheck: "https://" + n + "/cgi-bin/mmwebwx-bin/synccheck",
             API_webwxdownloadmedia: "https://" + o + "/cgi-bin/mmwebwx-bin/webwxgetmedia",
             API_webwxuploadmedia: "https://" + o + "/cgi-bin/mmwebwx-bin/webwxuploadmedia",
@@ -3031,6 +3144,7 @@ angular.module("Services", []),
             API_webwxgeticon: "/cgi-bin/mmwebwx-bin/webwxgeticon",
             API_webwxsendmsg: "/cgi-bin/mmwebwx-bin/webwxsendmsg",
             API_webwxsendmsgimg: "/cgi-bin/mmwebwx-bin/webwxsendmsgimg",
+            API_webwxsendmsgvedio: "/cgi-bin/mmwebwx-bin/webwxsendvideomsg",
             API_webwxsendemoticon: "/cgi-bin/mmwebwx-bin/webwxsendemoticon",
             API_webwxsendappmsg: "/cgi-bin/mmwebwx-bin/webwxsendappmsg",
             API_webwxgetheadimg: "/cgi-bin/mmwebwx-bin/webwxgetheadimg",
@@ -3048,6 +3162,7 @@ angular.module("Services", []),
             API_webwxreport: "/cgi-bin/mmwebwx-bin/webwxstatreport",
             API_webwxsearch: "/cgi-bin/mmwebwx-bin/webwxsearchcontact",
             API_webwxoplog: "/cgi-bin/mmwebwx-bin/webwxoplog",
+            API_checkupload: "/cgi-bin/mmwebwx-bin/webwxcheckupload",
             oplogCmdId: {
                 TOPCONTACT: 3,
                 MODREMARKNAME: 2
@@ -7562,7 +7677,8 @@ angular.module("Directives").directive("navContactDirective", ["$rootScope", "$t
                                 case a.KEYCODE_ARROW_UP:
                                     do
                                         s = s._index - 1 < 0 ? n : o[s._index - 1];
-                                    while ("undefined" != typeof s.NickName);break;
+                                    while ("undefined" != typeof s.NickName);
+                                    break;
                                 case a.KEYCODE_ARROW_DOWN:
                                     do {
                                         if (s._index + 1 >= o.length) {

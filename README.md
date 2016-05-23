@@ -19,7 +19,7 @@ wechatircd类似于bitlbee，在微信网页版和IRC间建起桥梁，可以使
 
 - `openssl req -newkey rsa:2048 -nodes -keyout a.key -x509 -out a.crt -subj '/CN=127.0.0.1' -dates 9999`创建密钥与证书。
 - Chrome访问`chrome://settings/certificates`，导入a.crt，在Authorities标签页选择该证书，Edit->Trust this certificate for identifying websites.
-- Chrome安装Switcheroo Redirector扩展，把<https://res.wx.qq.com/zh_CN/htmledition/v2/js/webwxApp2cbd9c.js>重定向至<https://127.0.0.1:9000/webwxapp.js>。若js更新，该路径会变化。
+- Chrome安装Switcheroo Redirector扩展，把<https://res.wx.qq.com/zh_CN/htmledition/v2/js/webwxApp2dbc76.js>重定向至<https://127.0.0.1:9000/webwxapp.js>。若js更新，该路径会变化。
 - `./wechatircd.py --tls-cert a.crt --tls-key a.key`，会监听127.1:6667的IRC和127.1:9000的HTTPS与WebSocket over TLS
 
 ![](https://maskray.me/static/2016-02-21-wechatircd/run.jpg)
@@ -27,7 +27,7 @@ wechatircd类似于bitlbee，在微信网页版和IRC间建起桥梁，可以使
 如果嫌X.509太麻烦的话可以不用TLS，但Chrome会在console里给出警告。
 
 - 执行`./wechatircd.py`，会监听127.1:6667的IRC和127.1:9000的HTTP与WebSocket，HTTP用于伺服项目根目录下的`webwxapp.js`。
-- 把<https://res.wx.qq.com/zh_CN/htmledition/v2/js/webwxApp2cbd9c.js>重定向至<http://127.0.0.1:9000/webwxapp.js>。若js更新，该路径会变化。
+- 把<https://res.wx.qq.com/zh_CN/htmledition/v2/js/webwxApp*.js>重定向至<http://127.0.0.1:9000/webwxapp.js>。若js更新，该路径会变化。
 - 把`webwxapp.js` `var ws = new MyWebSocket('wss://127.0.0.1:9000')`行单引号里面的部分修改成`ws://127.0.0.1:9000`
 
 ## 使用
