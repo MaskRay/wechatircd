@@ -248,7 +248,7 @@ angular.module("Controllers", []),
         }),
         t.$on("ngDialog.closed", function() {
             w.change("dialog:open", !1),
-            F = null 
+            F = null
         }),
         $(window).on("resize", function() {
             b()
@@ -998,7 +998,7 @@ angular.module("Controllers", []),
                     ,
                     e.cancel = function() {
                         r.close(),
-                        t = null 
+                        t = null
                     }
                     ,
                     e.$on("root:uploadImg:success", function(n, r) {
@@ -1285,7 +1285,7 @@ angular.module("Controllers", []),
                 clearTimeout(G),
                 G = setTimeout(function() {
                     Y && Y(),
-                    G = null 
+                    G = null
                 }, 300)
             }
         }
@@ -2648,7 +2648,7 @@ angular.module("Services", []),
                 var t = utilFactory.htmlDecode(e.MMActualContent).replace(/<br\/>/g, "");
                 t = utilFactory.encodeEmoji(t),
                 t = utilFactory.xml2json(t),
-                this._appAsTextMsgProcess(e, utilFactory.decodeEmoji(t.appmsg.title))
+                this._appAsTextMsgProcess(e, utilFactory.decodeEmoji(utilFactory.htmlEncode(t.appmsg.title)))
             },
             _appAudioMsgProcess: function(e) {
                 var t = this
@@ -4151,10 +4151,10 @@ angular.module("Services", []),
             },
             browser: function() {
                 var e, t = navigator.userAgent.toLowerCase();
-                if (null  != t.match(/trident/))
+                if (null != t.match(/trident/))
                     e = {
                         browser: "msie",
-                        version: null  != t.match(/msie ([\d.]+)/) ? t.match(/msie ([\d.]+)/)[1] : t.match(/rv:([\d.]+)/)[1]
+                        version: null != t.match(/msie ([\d.]+)/) ? t.match(/msie ([\d.]+)/)[1] : t.match(/rv:([\d.]+)/)[1]
                     };
                 else {
                     var o = /(msie) ([\w.]+)/.exec(t) || /(chrome)[ \/]([\w.]+)/.exec(t) || /(webkit)[ \/]([\w.]+)/.exec(t) || /(opera)(?:.*version|)[ \/]([\w.]+)/.exec(t) || t.indexOf("compatible") < 0 && /(mozilla)(?:.*? rv:([\w.]+)|)/.exec(t) || [];
@@ -4342,7 +4342,7 @@ angular.module("Services", []),
                         return n.genEmoticonHTML("emoji emoji" + t, this.EmojiCodeMap[t])
                 } else if (t = this.QQFaceMap[e.replace(/\[|\]/g, "")])
                     return n.genEmoticonHTML("qqemoji qqemoji" + t, e);
-                return null 
+                return null
             },
             getTuzkiByMd5: function(e) {
                 return this.md52Tuzki[e]
@@ -5406,7 +5406,7 @@ angular.module("Services", []),
                         url: i.URL
                     }),
                     r({}),
-                    i = null 
+                    i = null
                 }
             }
             ,
@@ -5414,7 +5414,7 @@ angular.module("Services", []),
         }
         var c = "screencapture"
           , s = "uploader"
-          , l = null 
+          , l = null
           , u = null ;
         return {
             isSupport: function() {
@@ -6329,7 +6329,7 @@ angular.module("Directives").directive("contenteditableDirective", ["$timeout", 
                             v.select()),
                             S.parentNode.removeChild(S)),
                             a.$setViewValue(p + _ + h),
-                            s = null 
+                            s = null
                         }
                     }, 50)
                 }),
@@ -7677,8 +7677,7 @@ angular.module("Directives").directive("navContactDirective", ["$rootScope", "$t
                                 case a.KEYCODE_ARROW_UP:
                                     do
                                         s = s._index - 1 < 0 ? n : o[s._index - 1];
-                                    while ("undefined" != typeof s.NickName);
-                                    break;
+                                    while ("undefined" != typeof s.NickName);break;
                                 case a.KEYCODE_ARROW_DOWN:
                                     do {
                                         if (s._index + 1 >= o.length) {
