@@ -235,7 +235,7 @@ ws.onmessage = data => {
                 chatFactory.setCurrentUserName(data.receiver)
                 wechatircd_LocalID = data.local_id
                 seenLocalID.add(wechatircd_LocalID)
-                editArea.editAreaCtn = data.message.replace('\n', '<br>')
+                editArea.editAreaCtn = data.message.replace('\n', '<br>').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
                 editArea.sendTextMessage()
             } catch (ex) {
                 consoleerror(ex.stack)
@@ -2776,7 +2776,8 @@ angular.module("Services", []),
                     //@ PATCH
                     var content = e.MMActualContent.replace(/<img class="emoji emoji(\w+)"[^>]+>/g, (_, x) =>
                         String.fromCodePoint(parseInt(x, 16))
-                    ).replace(/<br\/?>/g, '\n').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+                    ).replace(/<br\/?>/g, '\n')
+                    content = utilFactory.htmlDecode(content)
 
                     e.MMActualContent = utilFactory.hrefEncode(e.MMActualContent);
                     var r = contactFactory.getContact(e.MMPeerUserName);
