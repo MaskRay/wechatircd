@@ -21,6 +21,8 @@ wechatircd类似于bitlbee，在微信网页版和IRC间建起桥梁，可以使
 - 把证书导入浏览器，见下文
 - `./wechatircd.py --tls-cert a.crt --tls-key a.key`，会监听127.1:6667的IRC和127.1:9000的HTTPS与WebSocket over TLS
 
+默认监听`127.0.0.1`，如需监听其他地址，可以用选项`-l 127.1 192.168.0.2 192.168.1.2`。
+
 ### 浏览器设置
 
 Chrome/Chromium
