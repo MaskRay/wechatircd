@@ -457,17 +457,17 @@ class WeChatCommands:
 
     @staticmethod
     def friend(client, data):
-        debug({k: v for k, v in data['record'].items() if k in ['UserName', 'DisplayName', 'NickName', 'IsSelf']})
+        debug({k: v for k, v in data['record'].items() if k in ['UserName', 'DisplayName', 'NickName']})
         client.ensure_wechat_user(data['record'], 1)
 
     @staticmethod
     def room_contact(client, data):
-        debug({k: v for k, v in data['record'].items() if k in ['UserName', 'DisplayName', 'NickName', 'IsSelf']})
+        debug({k: v for k, v in data['record'].items() if k in ['UserName', 'DisplayName', 'NickName']})
         client.ensure_wechat_user(data['record'], -1)
 
     @staticmethod
     def room(client, data):
-        debug({k: v for k, v in data['record'].items() if k in ['UserName', 'DisplayName', 'NickName', 'IsSelf']})
+        debug({k: v for k, v in data['record'].items() if k in ['UserName', 'DisplayName', 'NickName']})
         record = data['record']
         room = client.ensure_wechat_room(record)
         if isinstance(record.get('MemberList'), list):
@@ -484,6 +484,10 @@ class WeChatCommands:
             user = client.ensure_wechat_user(data['receiver' if data['type'] == 'send' else 'sender'], 0)
             if user:
                 user.on_websocket_message(data)
+
+    @staticmethod
+    def self(client, data):
+        client.username = data['UserName']
 
     @staticmethod
     def send_file_message_nak(client, data):
@@ -961,6 +965,7 @@ class Client:
         self.nick2wechat_user = {}      # nick -> IRC user or WeChat user (friend or room contact)
         self.username2wechat_user = {}  # UserName -> WeChatUser
         self.uin = 0
+        self.username = ''
 
     def enter(self, channel):
         self.channels[irc_lower(channel.name)] = channel
@@ -994,7 +999,7 @@ class Client:
         assert isinstance(record['UserName'], str)
         assert isinstance(record.get('DisplayName', ''), str)
         assert isinstance(record.get('Uin', 0), int)
-        if record.get('IsSelf'):
+        if record['UserName'] == self.username:
             uin = record.get('Uin', 0)
             if uin:
                 self.uin = uin

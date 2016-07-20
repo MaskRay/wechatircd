@@ -62,54 +62,54 @@ function send_contact(command, record) {
     ws.send({command: command, record: y})
 }
 
-function clean_record(record) {
-    var r = {}
-    for (var key in record)
-        if (key == 'UserName' || key == 'Uin' || key == 'DisplayName' || key == 'NickName' || key == 'IsSelf' || key == 'MemberList')
-            r[key] = record[key]
-    return r
-}
-
 // 同步通讯录
 setInterval(() => {
     try {
-        var contacts = contactFactory.getAllContacts()
-        var seen = new Set(Object.keys(contacts))
-        var all = Object.assign({}, contacts, contactFactory.getAllStrangerContacts())
+        var contacts = contactFactory.getAllContacts(),
+            all = Object.assign({}, contacts, contactFactory.getAllStrangerContacts()),
+            me = accountFactory.getUserName(), me_sent = false
         for (var username in all) {
-            var x = contactFactory.getContact(username), xx = clean_record(x)
+            var x = all[username], xx = Object.assign({}, x), update = false, command
             xx.DisplayName = x.RemarkName || x.getDisplayName()
-            if (! x.isSelf() && (! deliveredContact.has(username) || JSON.stringify(xx) != JSON.stringify(deliveredContact.get(username)))) {
-                var command, update = true, members = []
+            if (x.isBrandContact() || x.isShieldUser())
+                ;
+            else if (! deliveredContact.has(username))
+                update = true
+            else {
+                var yy = deliveredContact.get(username)
+                if (xx.DisplayName != yy.DisplayName || x.isRoomContact() && x.MemberCount != yy.DeliveredMemberCount)
+                    update = true
+            }
+            if (update) {
+                if (! me_sent) {
+                    ws.send({command: 'self', UserName: me})
+                    me_sent = true
+                }
                 if (x.isRoomContact()) {
+                    var members = []
                     command = 'room'
                     for (var member of x.MemberList) {
-                        var u = member.UserName, y = contactFactory.getContact(u), set
-                        if (! y) continue
-                        var yy = clean_record(y)
+                        var u = member.UserName, y = all[u], yy, set
+                        if (! y) continue // not loaded
+                        yy = Object.assign({}, y)
                         yy.DisplayName = y.RemarkName || y.getDisplayName() || member.NickName
-                        if (y.isSelf())
-                            yy.IsSelf = true
                         members.push(yy)
-                        if (! y.isSelf() && ! seen.has(u) && (! ((set = deliveredRoomContact.get(u)) instanceof Set) || ! set.has(y.DisplayName))) {
+                        if (! (u in all) && (! ((set = deliveredRoomContact.get(u)) instanceof Set) || ! set.has(u))) {
                             if (! set)
                                 set = new Set
-                            ws.send({command: y.RemarkName === undefined ? 'room_contact' : 'friend', record: yy})
-                            set.add(yy.DisplayName)
+                            ws.send({command: y.isContact() ? 'friend' : 'room_contact', record: yy})
+                            set.add(u)
                             deliveredRoomContact.set(u, set)
                         }
                     }
                     xx.MemberList = members
-                } else if (x.isBrandContact() || x.isShieldUser())
-                    update = false
-                else if (x.isContact())
+                    xx.DeliveredMemberCount = members.length
+                } else if (x.isContact())
                     command = 'friend'
                 else
                     command = 'room_contact'
-                if (update) {
-                    ws.send({command: command, record: xx})
-                    deliveredContact.set(username, xx)
-                }
+                ws.send({command: command, record: xx})
+                deliveredContact.set(username, xx)
             }
         }
     } catch (ex) {
