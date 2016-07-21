@@ -2799,7 +2799,9 @@ angular.module("Services", []),
                                 receiver = Object.assign({}, receiver, {DisplayName: receiver.RemarkName || receiver.getDisplayName()})
                                 delete sender.MemberList
                                 delete receiver.MemberList
-                                if (e.MsgType == confFactory.MSGTYPE_IMAGE) // 3 图片
+                                if (e.MMLocationUrl)
+                                    content = `[位置] ${e.MMLocationDesc} ${e.MMLocationUrl}`
+                                else if (e.MsgType == confFactory.MSGTYPE_IMAGE) // 3 图片
                                     // e.getMsgImg
                                     content = '[图片] ' + 'https://wx.qq.com'+confFactory.API_webwxgetmsgimg + "?MsgID=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
                                 else if (e.MsgType == confFactory.MSGTYPE_VOICE) // 34 语音
