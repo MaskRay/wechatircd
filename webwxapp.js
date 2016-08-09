@@ -66,7 +66,7 @@ function send_contact(command, record) {
 setInterval(() => {
     try {
         var contacts = contactFactory.getAllContacts(),
-            all = Object.assign({}, contacts, contactFactory.getAllStrangerContacts()),
+            all = Object.assign({}, contactFactory.getAllStrangerContacts(), contacts),
             me = accountFactory.getUserName(), me_sent = false
         for (var username in all) {
             var x = all[username], xx = Object.assign({}, x), update = false, command
