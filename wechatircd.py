@@ -1449,7 +1449,7 @@ class Server:
     def start(self, loop):
         self.loop = loop
         self.servers = []
-        for i in self.options.listen:
+        for i in self.options.listen_ircd if self.options.listen_ircd else self.options.listen:
             self.servers.append(loop.run_until_complete(
                 asyncio.streams.start_server(self._accept, i, self.options.port)))
 
@@ -1473,6 +1473,8 @@ def main():
                     help='join mode for WeChat chatrooms. all: join all after connected; auto: join after the first message arrives; manual: no automatic join')
     ap.add_argument('-l', '--listen', nargs='*', default=['127.0.0.1'],
                     help='IRC/HTTP/WebSocket listen addresses')
+    ap.add_argument('--listen-ircd', nargs='*',
+                    help='IRC listen addresses (overriding --listen value for IRC server)')
     ap.add_argument('-p', '--port', type=int, default=6667,
                     help='IRC server listen port')
     ap.add_argument('-q', '--quiet', action='store_const', const=logging.WARN, dest='loglevel')
