@@ -2774,10 +2774,28 @@ angular.module("Services", []),
                         e.MMDigest = MM.context("938b111")
                     }
                     //@ PATCH
-                    var content = e.MMActualContent.replace(/<img class="emoji emoji(\w+)"[^>]+>/g, (_, x) =>
-                        String.fromCodePoint(parseInt(x, 16))
-                    ).replace(/<br\/?>/g, '\n')
-                    content = utilFactory.htmlDecode(content)
+                    var content = ''
+                    var range = document.createRange()
+                    range.selectNode(document.body) // Safari
+                    for (var i = range.createContextualFragment(e.MMActualContent).firstChild; i; i = i.nextSibling) {
+                        if (i instanceof HTMLImageElement) {
+                            do {
+                                var emoji = /^emoji emoji(\w+)$/.exec(i.className)
+                                if (emoji !== null) {
+                                    content += String.fromCodePoint(parseInt(emoji[1], 16))
+                                    break
+                                }
+                                emoji = /^(\[.+\])_web$/.exec(i.getAttribute('text'))
+                                if (emoji !== null) {
+                                    content += emoji[1]
+                                    break
+                                }
+                            } while (0)
+                        } else if (i instanceof HTMLBRElement)
+                            content += '\n'
+                        else
+                            content += utilFactory.htmlDecode(i.textContent)
+                    }
 
                     e.MMActualContent = utilFactory.hrefEncode(e.MMActualContent);
                     var r = contactFactory.getContact(e.MMPeerUserName);
