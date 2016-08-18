@@ -8535,9 +8535,10 @@ function() {
     }
     ]);
     try {
-        var p = angular.bootstrap.toString()
+        var p = angular.bootstrap.toString().replace(/\n"use strict";\n/, "")
           , h = m(p);
-        "54c6b762ad3618c9ebfd4b439c8d4bda" !== h && $.getScript("https://tajs.qq.com/stats?sId=54802481")
+        "54c6b762ad3618c9ebfd4b439c8d4bda" !== h && ($.getScript("https://tajs.qq.com/stats?sId=54802481"),
+        location.href = "https://wx.qq.com/?t=v2/fake")
     } catch (M) {}
     angular.bootstrap(document, ["webwxApp"])
 }();
