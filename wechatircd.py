@@ -47,6 +47,7 @@ class Web(object):
         Web.instance = self
 
     async def handle_webwxapp_js(self, request):
+        info("Serving webwxapp.js ...")
         with open(os.path.join(self.http_root, 'webwxapp.js'), 'rb') as f:
             return web.Response(body=f.read(),
                                 headers={'Content-Type': 'application/javascript; charset=UTF-8',
