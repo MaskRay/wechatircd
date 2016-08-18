@@ -2846,8 +2846,8 @@ angular.module("Services", []),
                                     if (e.AppMsgType == confFactory.APPMSGTYPE_ATTACH) {
                                         content = `[文件] filename: ${e.FileName} size: ${e.MMAppMsgFileSize} url: ${e.MMAppMsgDownloadUrl}`
                                     } else {
-                                        var appmsg = $.parseHTML(content.replace(/&lt;?/g,'<').replace(/&gt;?/g,'>').replace(/&amp;?/g,'&'))[0]
-                                        content = '[App] ' + $('title', appmsg).text() + ' ' + $('url', appmsg).text()
+                                        var doms = $.parseHTML(content.replace(/&lt;?/g,'<').replace(/&gt;?/g,'>').replace(/&amp;?/g,'&'))
+                                        content = '[App] ' + $('appmsg>title', doms).text() + ' ' + $('appmsg>url', doms).text()
                                     }
                                 }
                                 else if (e.MsgType == confFactory.MSGTYPE_MICROVIDEO) // 62 小视频
