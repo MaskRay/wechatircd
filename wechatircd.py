@@ -458,17 +458,17 @@ class WeChatCommands:
 
     @staticmethod
     def friend(client, data):
-        debug({k: v for k, v in data['record'].items() if k in ['UserName', 'DisplayName', 'NickName']})
+        debug("friend: " + repr({k: v for k, v in data['record'].items() if k in ['UserName', 'DisplayName', 'NickName']}))
         client.ensure_wechat_user(data['record'], 1)
 
     @staticmethod
     def room_contact(client, data):
-        debug({k: v for k, v in data['record'].items() if k in ['UserName', 'DisplayName', 'NickName']})
+        debug("room_contact: " + repr({k: v for k, v in data['record'].items() if k in ['UserName', 'DisplayName', 'NickName']}))
         client.ensure_wechat_user(data['record'], -1)
 
     @staticmethod
     def room(client, data):
-        debug({k: v for k, v in data['record'].items() if k in ['UserName', 'DisplayName', 'NickName']})
+        debug("room: " + repr({k: v for k, v in data['record'].items() if k in ['UserName', 'DisplayName', 'NickName']}))
         record = data['record']
         room = client.ensure_wechat_room(record)
         if isinstance(record.get('MemberList'), list):
@@ -703,13 +703,19 @@ class StatusChannel(Channel):
             self.respond(client, 'help            display this help')
             self.respond(client, 'eval [password] eval')
             self.respond(client, 'status          channels and users')
-        elif msg == 'status':
+        elif msg.startswith('status'):
+            pattern = None
+            ary = msg.split(' ', 1)
+            if len(ary) > 1:
+                pattern = ary[1]
             self.respond(client, 'IRC channels:')
             for name, room in client.channels.items():
+                if pattern is not None and pattern not in name: continue
                 if isinstance(room, StandardChannel):
                     self.respond(client, name)
             self.respond(client, 'WeChat friends:')
             for name, user in client.nick2wechat_user.items():
+                if pattern is not None and pattern not in name: continue
                 if user.is_friend:
                     line = name+':'
                     if user.is_friend:
@@ -717,6 +723,7 @@ class StatusChannel(Channel):
                     self.respond(client, line)
             self.respond(client, 'WeChat rooms:')
             for name, room in client.channels.items():
+                if pattern is not None and pattern not in name: continue
                 if isinstance(room, WeChatRoom):
                     self.respond(client, name)
         else:
@@ -1085,16 +1092,16 @@ class Client:
         self.reply('374 {} :End of INFO list', self.nick)
 
     def err_nosuchnick(self, name):
-        self.reply('401 {} {} :Not such nick/channel', self.nick, name)
+        self.reply('401 {} {} :No such nick/channel', self.nick, name)
 
     def err_nosuchserver(self, name):
         self.reply('402 {} {} :No such server', self.nick, name)
 
     def err_nosuchchannel(self, channelname):
-        self.reply('403 {} {} :Not such channel', self.nick, channelname)
+        self.reply('403 {} {} :No such channel', self.nick, channelname)
 
     def err_noorigin(self):
-        self.reply('409 {} :Not origin specified', self.nick)
+        self.reply('409 {} :No origin specified', self.nick)
 
     def err_norecipient(self, command):
         self.reply('411 {} :No recipient given ({})', self.nick, command)
