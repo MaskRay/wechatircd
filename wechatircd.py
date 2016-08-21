@@ -700,9 +700,12 @@ class StatusChannel(Channel):
             client.err_notonchannel(self.name)
             return
         if msg == 'help':
-            self.respond(client, 'help            display this help')
-            self.respond(client, 'eval [password] eval')
-            self.respond(client, 'status          channels and users')
+            self.respond(client, 'help')
+            self.respond(client, '    display this help')
+            self.respond(client, 'eval [password] expression')
+            self.respond(client, '    eval python expression')
+            self.respond(client, 'status [pattern]')
+            self.respond(client, '    show status for user, channel and wechat rooms')
         elif msg.startswith('status'):
             pattern = None
             ary = msg.split(' ', 1)
