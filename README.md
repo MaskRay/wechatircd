@@ -32,7 +32,7 @@ Chrome/Chromium
 
 Firefox
 
-- 安装Redirector扩展，重定向js，设置` Applies to: Main window (address bar), Scripts`。
+- 安装Redirector扩展，重定向js，设置` Applies to: Main window (address bar), Scripts`。（对于默认配置可直接导入配置文件: [Redirector.json](Redirector.json)）
 - 访问重定向后的js URL，报告Your connection is not secure，Advanced->Add Exception->Confirm Security Exception
 
 ![](https://maskray.me/static/2016-02-21-wechatircd/run.jpg)
@@ -56,7 +56,7 @@ Firefox
 在`+status` channel可以执行一些命令：
 
 - `help`，帮助
-- `status`，已获取的微信朋友、群列表
+- `status [pattern]`，已获取的微信朋友、群列表，支持 pattern 参数用来筛选满足 pattern 的结果，目前仅支持子串查询。如要查询所有群，由于群由 `&` 开头，所以可以执行 `status &`。
 - `eval $password $expr`: 如果运行时带上了`--password $password`选项，这里可以eval，方便调试，比如`eval $password client.wechat_users`
 
 ## IRC命令

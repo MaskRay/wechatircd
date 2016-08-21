@@ -458,17 +458,17 @@ class WeChatCommands:
 
     @staticmethod
     def friend(client, data):
-        debug({k: v for k, v in data['record'].items() if k in ['UserName', 'DisplayName', 'NickName']})
+        debug("friend: " + ', '.join([k + ':' + repr(data['record'].get(k)) for k in ['DisplayName', 'NickName', 'UserName']]))
         client.ensure_wechat_user(data['record'], 1)
 
     @staticmethod
     def room_contact(client, data):
-        debug({k: v for k, v in data['record'].items() if k in ['UserName', 'DisplayName', 'NickName']})
+        debug("room_contact: " + ', '.join([k + ':' + repr(data['record'].get(k)) for k in ['DisplayName', 'NickName', 'UserName']]))
         client.ensure_wechat_user(data['record'], -1)
 
     @staticmethod
     def room(client, data):
-        debug({k: v for k, v in data['record'].items() if k in ['UserName', 'DisplayName', 'NickName']})
+        debug("room: " + ', '.join([k + ':' + repr(data['record'].get(k)) for k in ['DisplayName', 'NickName', 'UserName']]))
         record = data['record']
         room = client.ensure_wechat_room(record)
         if isinstance(record.get('MemberList'), list):
@@ -700,25 +700,35 @@ class StatusChannel(Channel):
             client.err_notonchannel(self.name)
             return
         if msg == 'help':
-            self.respond(client, 'help            display this help')
-            self.respond(client, 'eval [password] eval')
-            self.respond(client, 'status          channels and users')
-        elif msg == 'status':
+            self.respond(client, 'help')
+            self.respond(client, '    display this help')
+            self.respond(client, 'eval [password] expression')
+            self.respond(client, '    eval python expression')
+            self.respond(client, 'status [pattern]')
+            self.respond(client, '    show status for user, channel and wechat rooms')
+        elif msg.startswith('status'):
+            pattern = None
+            ary = msg.split(' ', 1)
+            if len(ary) > 1:
+                pattern = ary[1]
             self.respond(client, 'IRC channels:')
             for name, room in client.channels.items():
+                if pattern is not None and pattern not in name: continue
                 if isinstance(room, StandardChannel):
-                    self.respond(client, name)
+                    self.respond(client, '    ' + name)
             self.respond(client, 'WeChat friends:')
             for name, user in client.nick2wechat_user.items():
                 if user.is_friend:
-                    line = name+':'
-                    if user.is_friend:
-                        line += ' friend'
-                    self.respond(client, line)
+                    if pattern is not None and not (pattern in name or pattern in user.record.get('DisplayName', '') or pattern in user.record.get('NickName','')): continue
+                    line = name + ': friend ('
+                    line += ', '.join([k + ':' + repr(v) for k, v in user.record.items() if k in ['DisplayName', 'NickName']])
+                    line += ')'
+                    self.respond(client, '    ' + line)
             self.respond(client, 'WeChat rooms:')
             for name, room in client.channels.items():
+                if pattern is not None and pattern not in name: continue
                 if isinstance(room, WeChatRoom):
-                    self.respond(client, name)
+                    self.respond(client, '    ' + name)
         else:
             m = re.match(r'eval (\S+) (.+)$', msg.strip())
             if m and m.group(1) == client.server.options.password:
@@ -1085,16 +1095,16 @@ class Client:
         self.reply('374 {} :End of INFO list', self.nick)
 
     def err_nosuchnick(self, name):
-        self.reply('401 {} {} :Not such nick/channel', self.nick, name)
+        self.reply('401 {} {} :No such nick/channel', self.nick, name)
 
     def err_nosuchserver(self, name):
         self.reply('402 {} {} :No such server', self.nick, name)
 
     def err_nosuchchannel(self, channelname):
-        self.reply('403 {} {} :Not such channel', self.nick, channelname)
+        self.reply('403 {} {} :No such channel', self.nick, channelname)
 
     def err_noorigin(self):
-        self.reply('409 {} :Not origin specified', self.nick)
+        self.reply('409 {} :No origin specified', self.nick)
 
     def err_norecipient(self, command):
         self.reply('411 {} :No recipient given ({})', self.nick, command)
