@@ -458,17 +458,17 @@ class WeChatCommands:
 
     @staticmethod
     def friend(client, data):
-        debug("friend: " + repr({k: v for k, v in data['record'].items() if k in ['UserName', 'DisplayName', 'NickName']}))
+        debug("friend: " + ', '.join([k + ':' + repr(data['record'].get(k)) for k in ['DisplayName', 'NickName', 'UserName']]))
         client.ensure_wechat_user(data['record'], 1)
 
     @staticmethod
     def room_contact(client, data):
-        debug("room_contact: " + repr({k: v for k, v in data['record'].items() if k in ['UserName', 'DisplayName', 'NickName']}))
+        debug("room_contact: " + ', '.join([k + ':' + repr(data['record'].get(k)) for k in ['DisplayName', 'NickName', 'UserName']]))
         client.ensure_wechat_user(data['record'], -1)
 
     @staticmethod
     def room(client, data):
-        debug("room: " + repr({k: v for k, v in data['record'].items() if k in ['UserName', 'DisplayName', 'NickName']}))
+        debug("room: " + ', '.join([k + ':' + repr(data['record'].get(k)) for k in ['DisplayName', 'NickName', 'UserName']]))
         record = data['record']
         room = client.ensure_wechat_room(record)
         if isinstance(record.get('MemberList'), list):
@@ -712,20 +712,20 @@ class StatusChannel(Channel):
             for name, room in client.channels.items():
                 if pattern is not None and pattern not in name: continue
                 if isinstance(room, StandardChannel):
-                    self.respond(client, name)
+                    self.respond(client, '    ' + name)
             self.respond(client, 'WeChat friends:')
             for name, user in client.nick2wechat_user.items():
-                if pattern is not None and pattern not in name: continue
                 if user.is_friend:
-                    line = name+':'
-                    if user.is_friend:
-                        line += ' friend'
-                    self.respond(client, line)
+                    if pattern is not None and not (pattern in name or pattern in user.record.get('DisplayName', '') or pattern in user.record.get('NickName','')): continue
+                    line = name + ': friend ('
+                    line += ', '.join([k + ':' + repr(v) for k, v in user.record.items() if k in ['DisplayName', 'NickName']])
+                    line += ')'
+                    self.respond(client, '    ' + line)
             self.respond(client, 'WeChat rooms:')
             for name, room in client.channels.items():
                 if pattern is not None and pattern not in name: continue
                 if isinstance(room, WeChatRoom):
-                    self.respond(client, name)
+                    self.respond(client, '    ' + name)
         else:
             m = re.match(r'eval (\S+) (.+)$', msg.strip())
             if m and m.group(1) == client.server.options.password:
