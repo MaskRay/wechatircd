@@ -6,6 +6,7 @@ from datetime import datetime
 import aiohttp, asyncio, inspect, json, logging.handlers, os, pprint, random, re, \
     signal, socket, ssl, string, sys, time, traceback, uuid, weakref
 
+# logging.basicConfig(filename='/tmp/wechatircd.log',level=logging.DEBUG)
 logger = logging.getLogger('wechatircd')
 
 
@@ -473,6 +474,10 @@ class WeChatCommands:
         room = client.ensure_wechat_room(record)
         if isinstance(record.get('MemberList'), list):
             room.update_members(client, record['MemberList'])
+
+    @staticmethod
+    def web_debug(client, data):
+        debug("web_debug: " + repr(data))
 
     @staticmethod
     def message(client, data):

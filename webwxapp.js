@@ -77,8 +77,10 @@ setInterval(() => {
                 update = true
             else {
                 var yy = deliveredContact.get(username)
-                if (xx.DisplayName != yy.DisplayName || x.isRoomContact() && x.MemberCount != yy.DeliveredMemberCount)
-                    update = true
+                if (xx.DisplayName != yy.DisplayName || x.isRoomContact() && x.MemberCount != yy.DeliveredMemberCount) {
+                    ws.send({command: 'web_debug', msg: 'update = true', data: [xx.DisplayName, yy.DisplayName, x.isRoomContact(), x.MemberCount, yy.DeliveredMemberCount]})
+                    update = true;
+                }
             }
             if (update) {
                 if (! me_sent) {
@@ -88,6 +90,7 @@ setInterval(() => {
                 if (x.isRoomContact()) {
                     var members = []
                     command = 'room'
+                    var contact_send = 0
                     for (var member of x.MemberList) {
                         var u = member.UserName, y = all[u], yy, set
                         if (! y) continue // not loaded
@@ -100,20 +103,31 @@ setInterval(() => {
                             ws.send({command: y.isContact() ? 'friend' : 'room_contact', record: yy})
                             set.add(u)
                             deliveredRoomContact.set(u, set)
+                            contact_send += 1
                         }
                     }
-                    xx.MemberList = members
-                    xx.DeliveredMemberCount = members.length
-                } else if (x.isContact())
+                    var yy = deliveredContact.get(username);
+                    if (contact_send == 0 && yy && yy.DeliveredMemberCount === members.length) {
+                        ws.send({command: 'web_debug', data: members.length, msg: 'update = false'})
+                        update = false;
+                    } else {
+                        xx.MemberList = members
+                        xx.DeliveredMemberCount = members.length
+                    }
+                } else if (x.isContact()) {
                     command = 'friend'
-                else
-                    command = 'room_contact'
-                ws.send({command: command, record: xx})
-                deliveredContact.set(username, xx)
+                } else {
+                    command = 'room_contact';
+                }
+                if (update) {
+                    ws.send({command: command, record: xx})
+                    deliveredContact.set(username, xx)
+                }
             }
         }
     } catch (ex) {
         consoleerror(ex.stack)
+        ws.send({command: 'web_debug', message: 'sync contact exception: ' + ex.stack})
     }
 }, 3000)
 
