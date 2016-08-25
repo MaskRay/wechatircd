@@ -51,6 +51,7 @@ var wechatircd_LocalID // 服务端通过WebSocket控制网页版发送消息时
 var seenLocalID = new Set() // 记录服务端请求发送的消息的LocalID，避免服务端收到自己发送的消息
 var deliveredContact = new Map()
 var deliveredRoomContact = new Map()
+var badContact = new Map();
 
 function wechatircd_reset() {
     seenLocalID.clear()
@@ -71,7 +72,10 @@ setInterval(() => {
         for (var username in all) {
             var x = all[username], xx = Object.assign({}, x), update = false, command
             if (! x) {
-                ws.send({command: 'web_debug', message: 'undefined user: ' + username})
+                if (!badContact.has(username)) {
+                    ws.send({command: 'web_debug', message: 'undefined user: ' + username});
+                }
+                badContact.set(username, x);
                 continue
             }
             xx.DisplayName = x.RemarkName
@@ -83,7 +87,10 @@ setInterval(() => {
                 }
             }
             if (! xx.DisplayName) {
-                ws.send({command: 'web_debug', message: 'unnamed user: ' + username})
+                if (!badContact.has(username)) {
+                    ws.send({command: 'web_debug', message: 'unnamed user: ' + username})
+                }
+                badContact.set(username, x);
                 continue
             }
             if (x.isBrandContact() || x.isShieldUser())
@@ -108,7 +115,10 @@ setInterval(() => {
                     for (var member of x.MemberList) {
                         var u = member.UserName, y = all[u], yy, set
                         if (! y) {
-                            ws.send({command: 'web_debug', message: 'undefined room contact:' + u})
+                            if (!badContact.has(u)) {
+                                ws.send({command: 'web_debug', message: 'undefined room contact:' + u});
+                            }
+                            badContact.set(u, y);
                             continue // not loaded
                         }
                         yy = Object.assign({}, y)
@@ -285,7 +295,24 @@ ws.onmessage = data => {
             chatroomFactory.modTopic(data.room, data.topic)
             break
         case 'eval':
-            ws.send({command: 'web_debug', result: eval('(' + data.expr + ')')})
+            ws.send({command: 'web_debug', input: data.expr, result: eval('(' + data.expr + ')')})
+            break
+        case 'reload_friend':
+            if (data.name == '__all__') {
+                deliveredContact.clear();
+            } else if (data.name) {
+                var contacts = contactFactory.getAllContacts();
+                for (var un in contacts) {
+                    user = contacts[un];
+                    if (!user) {
+                        continue;
+                    }
+                    if (user.RemarkName == data.name || user.getDisplayName() == data.name) {
+                        deliveredContact.delete(un);
+                        ws.send({command: 'web_debug', reloaded_contact: user})
+                    }
+                }
+            }
             break
         }
     } catch (ex) {
