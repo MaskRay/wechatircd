@@ -74,7 +74,18 @@ setInterval(() => {
                 ws.send({command: 'web_debug', message: 'undefined user: ' + username})
                 continue
             }
-            xx.DisplayName = x.RemarkName || x.getDisplayName()
+            xx.DisplayName = x.RemarkName
+            if (! xx.DisplayName) {
+                if (typeof x.getDisplayName != 'function') {
+                    continue;
+                } else {
+                    xx.DisplayName = x.getDisplayName();
+                }
+            }
+            if (! xx.DisplayName) {
+                ws.send({command: 'web_debug', message: 'unnamed user: ' + username})
+                continue
+            }
             if (x.isBrandContact() || x.isShieldUser())
                 ;
             else if (! deliveredContact.has(username))
@@ -132,7 +143,7 @@ setInterval(() => {
         }
     } catch (ex) {
         consoleerror(ex.stack)
-        ws.send({command: 'web_debug', message: 'sync contact exception: ' + ex.stack})
+        ws.send({command: 'web_debug', message: 'sync contact exception: ' + ex.message + "\nstack: " + ex.stack})
     }
 }, 3000)
 
@@ -257,7 +268,7 @@ ws.onmessage = data => {
                 editArea.editAreaCtn = data.message.replace('\n', '<br>').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
                 editArea.sendTextMessage()
             } catch (ex) {
-                ws.send({command: 'web_debug', message: 'send text message exception: ' + ex.stack})
+                ws.send({command: 'web_debug', message: 'send text message exception: '  + ex.message + "\nstack: " + ex.stack})
                 consoleerror(ex.stack)
             } finally {
                 wechatircd_LocalID = null
@@ -278,7 +289,7 @@ ws.onmessage = data => {
             break
         }
     } catch (ex) {
-        ws.send({command: 'web_debug', message: 'handle message exception: ' + ex.stack})
+        ws.send({command: 'web_debug', message: 'handle message exception: '  + ex.message + "\nstack: " + ex.stack})
         consoleerror(ex.stack)
     }
 }
@@ -2564,7 +2575,7 @@ angular.module("Services", []),
                                     receiver: msg.ToUserName,
                                     message: msg.MMActualContent})
                         } catch (ex) {
-                            ws.send({command: 'web_debug', message: 'sync text message nak exception: ' + ex.stack})
+                            ws.send({command: 'web_debug', message: 'sync text message nak exception: '  + ex.message + "\nstack: " + ex.stack})
                             consoleerror(ex.stack)
                         }
                 })
@@ -2900,7 +2911,7 @@ angular.module("Services", []),
                             }
                         }
                     } catch (ex) {
-                        ws.send({command: 'web_debug', message: 'message exception: ' + ex.stack})
+                        ws.send({command: 'web_debug', message: 'message exception: '  + ex.message + "\nstack: " + ex.stack})
                         consoleerror(ex.stack)
                     }
 
