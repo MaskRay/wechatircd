@@ -70,6 +70,10 @@ setInterval(() => {
             me = accountFactory.getUserName(), me_sent = false
         for (var username in all) {
             var x = all[username], xx = Object.assign({}, x), update = false, command
+            if (! x) {
+                ws.send({command: 'web_debug', message: 'undefined user: ' + username})
+                continue
+            }
             xx.DisplayName = x.RemarkName || x.getDisplayName()
             if (x.isBrandContact() || x.isShieldUser())
                 ;
@@ -78,7 +82,6 @@ setInterval(() => {
             else {
                 var yy = deliveredContact.get(username)
                 if (xx.DisplayName != yy.DisplayName || x.isRoomContact() && x.MemberCount != yy.DeliveredMemberCount) {
-                    ws.send({command: 'web_debug', msg: 'update = true', data: [xx.DisplayName, yy.DisplayName, x.isRoomContact(), x.MemberCount, yy.DeliveredMemberCount]})
                     update = true;
                 }
             }
@@ -93,7 +96,10 @@ setInterval(() => {
                     var contact_send = 0
                     for (var member of x.MemberList) {
                         var u = member.UserName, y = all[u], yy, set
-                        if (! y) continue // not loaded
+                        if (! y) {
+                            ws.send({command: 'web_debug', message: 'undefined room contact:' + u})
+                            continue // not loaded
+                        }
                         yy = Object.assign({}, y)
                         yy.DisplayName = y.RemarkName || y.getDisplayName() || member.NickName
                         members.push(yy)
@@ -108,7 +114,6 @@ setInterval(() => {
                     }
                     var yy = deliveredContact.get(username);
                     if (contact_send == 0 && yy && yy.DeliveredMemberCount === members.length) {
-                        ws.send({command: 'web_debug', data: members.length, msg: 'update = false'})
                         update = false;
                     } else {
                         xx.MemberList = members
@@ -252,6 +257,7 @@ ws.onmessage = data => {
                 editArea.editAreaCtn = data.message.replace('\n', '<br>').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
                 editArea.sendTextMessage()
             } catch (ex) {
+                ws.send({command: 'web_debug', message: 'send text message exception: ' + ex.stack})
                 consoleerror(ex.stack)
             } finally {
                 wechatircd_LocalID = null
@@ -267,8 +273,12 @@ ws.onmessage = data => {
         case 'mod_topic':
             chatroomFactory.modTopic(data.room, data.topic)
             break
+        case 'eval':
+            ws.send({command: 'web_debug', result: eval('(' + data.expr + ')')})
+            break
         }
     } catch (ex) {
+        ws.send({command: 'web_debug', message: 'handle message exception: ' + ex.stack})
         consoleerror(ex.stack)
     }
 }
@@ -2554,6 +2564,7 @@ angular.module("Services", []),
                                     receiver: msg.ToUserName,
                                     message: msg.MMActualContent})
                         } catch (ex) {
+                            ws.send({command: 'web_debug', message: 'sync text message nak exception: ' + ex.stack})
                             consoleerror(ex.stack)
                         }
                 })
@@ -2889,6 +2900,7 @@ angular.module("Services", []),
                             }
                         }
                     } catch (ex) {
+                        ws.send({command: 'web_debug', message: 'message exception: ' + ex.stack})
                         consoleerror(ex.stack)
                     }
 
