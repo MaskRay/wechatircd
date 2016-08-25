@@ -181,6 +181,17 @@ class Web(object):
                 pass
             break
 
+    def eval_web(self, expr):
+        for ws in self.ws:
+            try:
+                ws.send_str(json.dumps({
+                    'command': 'eval',
+                    'expr': expr,
+                }))
+            except:
+                pass
+            break
+
 ### IRC utilities
 
 def irc_lower(s):
@@ -734,6 +745,16 @@ class StatusChannel(Channel):
                 if pattern is not None and pattern not in name: continue
                 if isinstance(room, WeChatRoom):
                     self.respond(client, '    ' + name)
+        elif msg.startswith('web_eval'):
+            expr = None
+            ary = msg.split(' ', 1)
+            if len(ary) > 1:
+                expr = ary[1]
+            if not expr:
+                self.respond(client, 'None')
+            else:
+                Web.instance.eval_web(expr)
+                self.respond(client, 'expr sent, please use debug log to view eval result')
         else:
             m = re.match(r'eval (\S+) (.+)$', msg.strip())
             if m and m.group(1) == client.server.options.password:
