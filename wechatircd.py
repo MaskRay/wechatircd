@@ -192,6 +192,17 @@ class Web(object):
                 pass
             break
 
+    def reload_friend(self, who):
+        for ws in self.ws:
+            try:
+                ws.send_str(json.dumps({
+                    'command': 'reload_friend',
+                    'name': who,
+                }))
+            except:
+                pass
+            break
+
 ### IRC utilities
 
 def irc_lower(s):
@@ -722,6 +733,8 @@ class StatusChannel(Channel):
             self.respond(client, '    eval python expression')
             self.respond(client, 'status [pattern]')
             self.respond(client, '    show status for user, channel and wechat rooms')
+            self.respond(client, 'reload_friend $name')
+            self.respond(client, '    reload friend info in case of no such nick/channel in privmsg, and use __all__ as name if you want to reload all')
         elif msg.startswith('status'):
             pattern = None
             ary = msg.split(' ', 1)
@@ -755,6 +768,15 @@ class StatusChannel(Channel):
             else:
                 Web.instance.eval_web(expr)
                 self.respond(client, 'expr sent, please use debug log to view eval result')
+        elif msg.startswith('reload_friend'):
+            who = None
+            ary = msg.split(' ', 1)
+            if len(ary) > 1:
+                who = ary[1]
+            if not who:
+                self.respond(client, 'reload_friend <name>')
+            else:
+                Web.instance.reload_friend(who)
         else:
             m = re.match(r'eval (\S+) (.+)$', msg.strip())
             if m and m.group(1) == client.server.options.password:
