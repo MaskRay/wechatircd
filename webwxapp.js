@@ -101,6 +101,13 @@ setInterval(() => {
                 var yy = deliveredContact.get(username)
                 if (xx.DisplayName != yy.DisplayName || x.isRoomContact() && x.MemberCount != yy.DeliveredMemberCount) {
                     update = true;
+                } else if (yy.SentContactType != 'friend' && x.isContact() && !x.isRoomContact()) {
+                    if (username[1] != '@') {       // prevent 
+                        ws.send({command: 'web_debug', message: 'contact changed from ' + yy.SentContactType + ' to friend: ' + xx.DisplayName, user: xx});
+                    } else {
+                        ws.send({command: 'web_debug', message: 'contact changed from ' + yy.SentContactType + ' to friend: ' + xx.DisplayName, username: username});
+                    }
+                    update = true;
                 }
             }
             if (update) {
@@ -139,11 +146,14 @@ setInterval(() => {
                     } else {
                         xx.MemberList = members
                         xx.DeliveredMemberCount = members.length
+                        xx.SentContactType = 'room';
                     }
                 } else if (x.isContact()) {
                     command = 'friend'
+                    xx.SentContactType = command
                 } else {
                     command = 'room_contact';
+                    xx.SentContactType = command
                 }
                 if (update) {
                     ws.send({command: command, record: xx})
