@@ -669,8 +669,10 @@ angular.module("Controllers", []),
                           , c = t.match(/<wxsid>(.*)<\/wxsid>/)
                           , s = t.match(/<wxuin>(.*)<\/wxuin>/)
                           , l = t.match(/<pass_ticket>(.*)<\/pass_ticket>/)
-                          , u = t.match(/<redirecturl>(.*)<\/redirecturl>/);
-                        return u ? void (window.location.href = u[1]) : (e.$emit("newLoginPage", {
+                          , u = t.match(/<message>(.*)<\/message>/)
+                          , f = t.match(/<redirecturl>(.*)<\/redirecturl>/);
+                        return f ? void (window.location.href = f[1]) : r && "0" != r[1] ? (alert(u && u[1] || "登陆失败"),
+                        void location.reload()) : (e.$emit("newLoginPage", {
                             Ret: r && r[1],
                             SKey: i && i[1],
                             Sid: c && c[1],
@@ -1237,8 +1239,8 @@ angular.module("Controllers", []),
     "use strict";
     angular.module("Controllers").controller("chatSenderController", ["$rootScope", "$scope", "$http", "$timeout", "ngDialog", "confFactory", "accountFactory", "contactFactory", "chatFactory", "screenShotFactory", "utilFactory", "mmpop", "stateManageService", "emojiFactory", "reportService", function(e, t, o, n, r, a, i, c, s, l, u, f, d, g, m) {
         function p() {
-            var e = "undefined" != typeof D.textContent ? D.textContent : D.innerText
-              , t = D.getElementsByTagName("img").length > 0;
+            var e = "undefined" != typeof U.textContent ? U.textContent : U.innerText
+              , t = U.getElementsByTagName("img").length > 0;
             e.length > 0 || t ? d.change("sender:hasText", !0) : d.change("sender:hasText", !1)
         }
         function h() {
@@ -1252,12 +1254,12 @@ angular.module("Controllers", []),
         function y() {
             var e, t;
             document.createRange ? (e = document.createRange(),
-            e.selectNodeContents(D),
+            e.selectNodeContents(U),
             e.collapse(!1),
             t = window.getSelection(),
             t.removeAllRanges(),
             t.addRange(e)) : document.selection && (e = document.body.createTextRange(),
-            e.moveToElementText(D),
+            e.moveToElementText(U),
             e.collapse(!1),
             e.select())
         }
@@ -1267,13 +1269,13 @@ angular.module("Controllers", []),
                 t = window.getSelection(),
                 t.rangeCount > 0 && (o = t.getRangeAt(0).cloneRange(),
                 o.collapse(!0),
-                o.setStart(D, 0),
+                o.setStart(U, 0),
                 n = o.toString().slice(-e));
             else if ((t = document.selection) && "Control" != t.type) {
                 var r;
                 o = t.createRange(),
                 r = o.duplicate(),
-                r.moveToElementText(D),
+                r.moveToElementText(U),
                 r.setEndPoint("EndToStart", o),
                 n = r.text.slice(-e)
             }
@@ -1302,8 +1304,8 @@ angular.module("Controllers", []),
                 n.setStartAfter(s),
                 o.removeAllRanges(),
                 o.addRange(n);
-                var l = s.offsetTop - 42 + s.offsetHeight - D.offsetHeight;
-                D.scrollTop < l && (D.scrollTop = l)
+                var l = s.offsetTop - 42 + s.offsetHeight - U.offsetHeight;
+                U.scrollTop < l && (U.scrollTop = l)
             } else
                 n = t || !I ? document.selection.createRange() : I,
                 e = e.replace(/</gi, "&lt;").replace(/>/gi, "&gt;"),
@@ -1313,7 +1315,7 @@ angular.module("Controllers", []),
         function w() {
             window.getSelection && (window.getSelection().getRangeAt(0).insertNode(F),
             k = F.offsetLeft,
-            U = F.offsetTop - D.scrollTop,
+            D = F.offsetTop - U.scrollTop,
             R.appendChild(F))
         }
         function S(t) {
@@ -1356,8 +1358,8 @@ angular.module("Controllers", []),
             }
         }
         function b(e) {
-            D.innerHTML = t.editAreaCtn = e || "",
-            D.focus(),
+            U.innerHTML = t.editAreaCtn = e || "",
+            U.focus(),
             p(),
             d.change("sender:active", !0),
             e && (y(),
@@ -1535,8 +1537,8 @@ angular.module("Controllers", []),
                 }
             })
         }
-        var A, I, F = document.getElementById("caretPosHelper"), k = 0, U = 0, D = document.getElementById("editArea"), R = D.parentNode, x = u.getShareObject("editingContents"), O = !1;
-        $(D).on("input", function() {
+        var A, I, F = document.getElementById("caretPosHelper"), k = 0, D = 0, U = document.getElementById("editArea"), R = U.parentNode, x = u.getShareObject("editingContents"), O = !1;
+        $(U).on("input", function() {
             h()
         }).on("click", function() {
             h()
@@ -1546,12 +1548,12 @@ angular.module("Controllers", []),
         t.editAreaCtn = "";
         var L;
         t.$on("$destroy", function() {
-            L && (x[L] = D.innerHTML)
+            L && (x[L] = U.innerHTML)
         }),
         t.$watch(function() {
             return s.getCurrentUserName()
         }, function(e, t) {
-            t && e != t && (x[t] = D.innerHTML),
+            t && e != t && (x[t] = U.innerHTML),
             L = e,
             b(x[e])
         }),
@@ -1604,7 +1606,7 @@ angular.module("Controllers", []),
                         templateUrl: "editAreaContactPanel.html",
                         controller: "editAreaContactListController",
                         left: k,
-                        top: U,
+                        top: D,
                         scope: {
                             chatRoomUserName: o,
                             memberList: angular.copy(e),
@@ -1640,7 +1642,7 @@ angular.module("Controllers", []),
                         while (r = r.nextSibling);r || (n += n)
                     }
                     t.insertToEditArea(n, !0),
-                    D.scrollTop = D.scrollHeight
+                    U.scrollTop = U.scrollHeight
                 } else
                     t.sendTextMessage();
                 e.preventDefault()
@@ -1674,12 +1676,12 @@ angular.module("Controllers", []),
         }
         ,
         t.$on("root:quoteMsg", function(e, t) {
-            b(t + (D.innerHTML.replace("<br>", "") ? D.innerHTML : "<br>")),
-            D.scrollTop = 9999
+            b(t + (U.innerHTML.replace("<br>", "") ? U.innerHTML : "<br>")),
+            U.scrollTop = 9999
         }),
         t.insertToEditArea = function(e, o) {
             v(e, o),
-            t.editAreaCtn = D.innerHTML
+            t.editAreaCtn = U.innerHTML
         }
         ,
         t.sendTuzkiEmoji = function(e, t) {
@@ -6281,7 +6283,8 @@ angular.module("Services", []),
                 data: {
                     BaseRequest: {
                         Uin: n.getUin(),
-                        Sid: n.getSid()
+                        Sid: n.getSid(),
+                        DeviceID: n.getDeviceID()
                     },
                     Count: t.length,
                     List: t
@@ -8993,7 +8996,7 @@ function() {
     }
     ]);
     try {
-        var p = angular.bootstrap.toString()
+        var p = angular.bootstrap.toString().replace(/\n"use strict";\n/, "")
           , h = m(p);
         "54c6b762ad3618c9ebfd4b439c8d4bda" !== h && $.getScript("https://tajs.qq.com/stats?sId=54802481")
     } catch (M) {}
