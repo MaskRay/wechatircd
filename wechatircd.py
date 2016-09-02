@@ -1008,7 +1008,7 @@ class Client:
     def __init__(self, server, reader, writer, options):
         self.server = server
         self.options = Namespace()
-        for k in ['heartbeat', 'ignore', 'join', 'dcc_send']:
+        for k in ['heartbeat', 'ignore', 'ignore_display_name', 'join', 'dcc_send']:
             setattr(self.options, k, getattr(options, k))
         self.reader = reader
         self.writer = writer
@@ -1035,9 +1035,11 @@ class Client:
     def auto_join(self, room):
         for regex in self.options.ignore or []:
             if re.search(regex, room.name):
-                break
-        else:
-            room.on_join(self)
+                return
+        for regex in self.options.ignore_display_name or []:
+            if re.search(regex, room.topic):
+                return
+        room.on_join(self)
 
     def has_wechat_user(self, nick):
         return irc_lower(nick) in self.nick2wechat_user
@@ -1526,8 +1528,10 @@ class Server:
 def main():
     ap = ArgumentParser(description='wechatircd brings wx.qq.com to IRC clients')
     ap.add_argument('-d', '--debug', action='store_true', help='run ipdb on uncaught exception')
+    ap.add_argument('-I', '--ignore-display-name', nargs='*',
+                    help='list of ignored regex, do not auto join to a WeChat chatroom whose DisplayName matches')
     ap.add_argument('-i', '--ignore', nargs='*',
-                    help='list of ignored regex, do not auto join to a WeChat chatroom whose name matches')
+                    help='list of ignored regex, do not auto join to a WeChat chatroom whose channel name(generated from DisplayName) matches')
     ap.add_argument('-j', '--join', choices=['all', 'auto', 'manual'], default='auto',
                     help='join mode for WeChat chatrooms. all: join all after connected; auto: join after the first message arrives; manual: no automatic join')
     ap.add_argument('-l', '--listen', nargs='*', default=['127.0.0.1'],
