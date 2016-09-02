@@ -28,7 +28,7 @@ wechatircd类似于bitlbee，在微信网页版和IRC间建起桥梁，可以使
 Chrome/Chromium
 
 - 访问`chrome://settings/certificates`，导入a.crt，在Authorities标签页选择该证书，Edit->Trust this certificate for identifying websites.
-- 安装Switcheroo Redirector扩展，把<https://res.wx.qq.com/zh_CN/htmledition/v2/js/webwxApp302bc5.js>重定向至<https://127.0.0.1:9000/webwxapp.js>。若js更新，该路径会变化。
+- 安装Switcheroo Redirector Plus扩展，选择regular expression匹配方式，把<https://res.wx.qq.com/zh_CN/htmledition/v2/js/webwxApp.*.js>重定向至<https://127.0.0.1:9000/webwxapp.js>。网页版js更新后URL会变化。
 
 Firefox
 
