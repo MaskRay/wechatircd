@@ -301,11 +301,11 @@ ws.onmessage = data => {
         case 'del_member':
             chatroomFactory.delMember(data.room, data.user)
             break
-        case 'mod_topic':
-            chatroomFactory.modTopic(data.room, data.topic)
-            break
         case 'eval':
             ws.send({command: 'web_debug', input: data.expr, result: eval('(' + data.expr + ')')})
+            break
+        case 'mod_topic':
+            chatroomFactory.modTopic(data.room, data.topic)
             break
         case 'reload_friend':
             if (data.name == '__all__') {
@@ -2886,7 +2886,7 @@ angular.module("Services", []),
                         // 非服务端生成
                         else {
                             var sender = contactFactory.getContact(e.MMActualSender)
-                            var receiver = contactFactory.getContact(e.MMPeerUserName)
+                            var receiver = contactFactory.getContact(e.MMIsChatRoom ? e.MMPeerUserName : e.ToUserName)
                             if (sender && receiver) {
                                 sender = Object.assign({}, sender, {DisplayName: sender.RemarkName || sender.getDisplayName()})
                                 receiver = Object.assign({}, receiver, {DisplayName: receiver.RemarkName || receiver.getDisplayName()})
@@ -2932,16 +2932,14 @@ angular.module("Services", []),
                                 else if (e.MsgType == confFactory.MSGTYPE_RECALLED) // 10002 撤回
                                     content = '[撤回了一条消息]'
                                 if (e.MMIsChatRoom) {
-                                    ws.send({command: 'message',
-                                            type: e.MMIsSend ? 'send' : 'receive',
+                                    ws.send({command: 'room_message',
                                             sender: sender,
-                                            room: receiver,
+                                            receiver: receiver,
                                             message: content})
                                     // 发送成功(无异常)则标记为已读
                                     e.MMUnread = false
                                 } else if (! sender.isBrandContact()) {
                                     ws.send({command: 'message',
-                                            type: e.MMIsSend ? 'send' : 'receive',
                                             sender: sender,
                                             receiver: receiver,
                                             message: content})

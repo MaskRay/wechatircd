@@ -48,12 +48,12 @@ Firefox
 ## 使用
 
 - 登录<https://wx.qq.com>，会自动发起WebSocket连接。若打开多个，只有第一个生效
-- IRC客户端连接127.1:6667(weechat的话使用`/server add wechat 127.1/6667`)，会自动加入`+status` channel
+- IRC客户端连接127.1:6667(weechat的话使用`/server add wechat 127.1/6667`)，会自动加入`+wechat` channel
 
 在`+telegram`发信并不会群发，只是为了方便查看有哪些朋友。
 微信朋友的nick优先选取备注名(`RemarkName`)，其次为`DisplayName`(原始JS根据昵称等自动填写的一个名字)
 
-在`+status` channel可以执行一些命令：
+在`+wechat` channel可以执行一些命令：
 
 - `help`，帮助
 - `status [pattern]`，已获取的微信朋友、群列表，支持 pattern 参数用来筛选满足 pattern 的结果，目前仅支持子串查询。如要查询所有群，由于群由 `&` 开头，所以可以执行 `status &`。
@@ -125,7 +125,7 @@ Emoji在网页上呈现时为`<img class="emoji emoji1f604" text="_web" src="
 ├── Server                   IRC server
 ├── Channel
 │   ├── StandardChannel      `#`开头的IRC channel
-│   ├── StatusChannel        `+status`，查看控制当前微信会话
+│   ├── StatusChannel        `+wechat`，查看控制当前微信会话
 │   └── WeChatRoom           微信群对应的channel，仅该客户端可见
 ├── (User)
 │   ├── Client               IRC客户端连接

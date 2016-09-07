@@ -6,8 +6,8 @@ from datetime import datetime
 import aiohttp, asyncio, inspect, json, logging.handlers, os, pprint, random, re, \
     signal, socket, ssl, string, sys, time, traceback, uuid, weakref
 
-# logging.basicConfig(filename='/tmp/wechatircd.log',level=logging.DEBUG)
 logger = logging.getLogger('wechatircd')
+im_name = 'WeChat'
 
 
 def debug(msg, *args):
@@ -36,7 +36,7 @@ class ExceptionHook(object):
         return self.instance(*args, **kwargs)
 
 
-### HTTP serving webwxapp.js & WebSocket server
+### HTTP serving js & WebSocket server
 
 class Web(object):
     instance = None
@@ -47,8 +47,7 @@ class Web(object):
         assert not Web.instance
         Web.instance = self
 
-    async def handle_webwxapp_js(self, request):
-        info("Serving webwxapp.js ...")
+    async def handle_app_js(self, request):
         with open(os.path.join(self.http_root, 'webwxapp.js'), 'rb') as f:
             return web.Response(body=f.read(),
                                 headers={'Content-Type': 'application/javascript; charset=UTF-8',
@@ -87,7 +86,7 @@ class Web(object):
         self.app = aiohttp.web.Application()
         self.app.router.add_route('GET', '/', self.handle_web_socket)
         self.app.router.add_route(
-            'GET', '/webwxapp.js', self.handle_webwxapp_js)
+            'GET', '/webwxapp.js', self.handle_app_js)
         self.handler = self.app.make_handler()
         self.srv = []
         for i in listens:
@@ -181,23 +180,23 @@ class Web(object):
                 pass
             break
 
-    def eval_web(self, expr):
-        for ws in self.ws:
-            try:
-                ws.send_str(json.dumps({
-                    'command': 'eval',
-                    'expr': expr,
-                }))
-            except:
-                pass
-            break
-
     def reload_friend(self, who):
         for ws in self.ws:
             try:
                 ws.send_str(json.dumps({
                     'command': 'reload_friend',
                     'name': who,
+                }))
+            except:
+                pass
+            break
+
+    def web_eval(self, expr):
+        for ws in self.ws:
+            try:
+                ws.send_str(json.dumps({
+                    'command': 'eval',
+                    'expr': expr,
                 }))
             except:
                 pass
@@ -246,10 +245,10 @@ class RegisteredCommands:
     @staticmethod
     def info(client):
         client.rpl_info('{} users', len(client.server.nicks))
-        client.rpl_info('{} WeChat users', len(client.username2wechat_user))
-        client.rpl_info('{} WeChat friends',
-                        len(StatusChannel.instance.shadow_members.get(client, ())))
-        client.rpl_info('{} WeChat rooms', len(client.username2wechat_room))
+        client.rpl_info('{} {} users', im_name, len(client.username2special_user))
+        client.rpl_info('{} {} friends', im_name,
+                        len(StatusChannel.instance.shadow_members.get(client, {})))
+        client.rpl_info('{} {} rooms', im_name, len(client.username2special_room))
 
     @staticmethod
     def invite(client, nick, channelname):
@@ -262,7 +261,7 @@ class RegisteredCommands:
     def ison(client, *nicks):
         client.reply('303 {} :{}', client.nick,
                      ' '.join(nick for nick in nicks
-                              if client.has_wechat_user(nick) or
+                              if client.has_special_user(nick) or
                               client.server.has_nick(nick)))
 
     @staticmethod
@@ -273,8 +272,8 @@ class RegisteredCommands:
                 channel.on_part(client, channel.name)
         else:
             for channelname in arg.split(','):
-                if client.has_wechat_room(channelname):
-                    client.get_wechat_room(channelname).on_join(client)
+                if client.has_special_room(channelname):
+                    client.get_special_room(channelname).on_join(client)
                 else:
                     try:
                         client.server.ensure_channel(channelname).on_join(client)
@@ -294,10 +293,10 @@ class RegisteredCommands:
             channels = [client.get_channel(channelname)
                         for channelname in arg.split(',')
                         if client.has_channel(channelname) or
-                        client.has_wechat_room(channelname)]
+                        client.has_special_room(channelname)]
         else:
             channels = set(client.channels.values())
-            for channel in client.username2wechat_room.values():
+            for channel in client.username2special_room.values():
                 channels.add(channel)
             channels = list(channels)
         channels.sort(key=lambda ch: ch.name)
@@ -308,14 +307,15 @@ class RegisteredCommands:
 
     @staticmethod
     def lusers(client):
-        client.reply('251 :There are {} users and {} WeChat users (local to you) on 1 server',
+        client.reply('251 :There are {} users and {} {} users (local to you) on 1 server',
                      len(client.server.nicks),
-                     len(client.username2wechat_user)
+                     len(client.username2special_user),
+                     im_name
                      )
 
     @staticmethod
     def mode(client, target, *args):
-        if client.has_wechat_user(target):
+        if client.has_special_user(target):
             if args:
                 client.err_umodeunknownflag()
             else:
@@ -326,8 +326,8 @@ class RegisteredCommands:
             else:
                 client2 = client.server.get_nick(target)
                 client.rpl_umodeis(client2.mode)
-        elif client.has_wechat_room(target):
-            client.get_wechat_room(target).on_mode(client)
+        elif client.has_special_room(target):
+            client.get_special_room(target).on_mode(client)
         elif client.server.has_channel(target):
             client.server.get_channel(target).on_mode(client)
         else:
@@ -391,8 +391,8 @@ class RegisteredCommands:
 
     @staticmethod
     def summon(client, nick, msg):
-        if client.has_wechat_user(nick):
-            Web.instance.add_friend(client.get_wechat_user(nick).username, msg)
+        if client.has_special_user(nick):
+            Web.instance.add_friend(client.get_special_user(nick).username, msg)
         else:
             client.err_nologin(nick)
 
@@ -410,8 +410,8 @@ class RegisteredCommands:
 
     @staticmethod
     def who(client, target):
-        if client.has_wechat_user(target):
-            client.get_wechat_user(target).on_who_member(
+        if client.has_special_user(target):
+            client.get_special_user(target).on_who_member(
                 client, StatusChannel.instance.name)
         elif client.server.has_nick(target):
             client.server.get_nick(target).on_who_member(
@@ -429,8 +429,8 @@ class RegisteredCommands:
             target = args[0]
         else:
             target = args[1]
-        if client.has_wechat_user(target):
-            client.get_wechat_user(target).on_whois(client)
+        if client.has_special_user(target):
+            client.get_special_user(target).on_whois(client)
         elif client.server.has_nick(target):
             client.server.get_nick(target).on_whois(client)
         else:
@@ -448,9 +448,9 @@ class RegisteredCommands:
             return
         target = args[0]
         msg = args[1]
-        # on name conflict, prefer to resolve WeChat user first
-        if client.has_wechat_user(target):
-            user = client.get_wechat_user(target)
+        # on name conflict, prefer to resolve special user first
+        if client.has_special_user(target):
+            user = client.get_special_user(target)
             if user.is_friend:
                 user.on_notice_or_privmsg(client, command, msg)
             elif command == 'PRIVMSG':
@@ -460,7 +460,7 @@ class RegisteredCommands:
             client2 = client.server.get_nick(target)
             client2.write(':{} {} {} :{}'.format(
                 client.prefix, 'PRIVMSG', target, msg))
-        # IRC channel or WeChat chatroom
+        # IRC channel or special chatroom
         elif client.is_in_channel(target):
             client.get_channel(target).on_notice_or_privmsg(
                 client, command, msg)
@@ -468,50 +468,40 @@ class RegisteredCommands:
             client.err_nosuchnick(target)
 
 
-class WeChatCommands:
+class SpecialCommands:
     @staticmethod
     def add_friend_ack(client, data):
-        nick = client.username2wechat_user[data['user']].nick
+        nick = client.username2special_user[data['user']].nick
         client.reply('342 {} {} :Summoning user to IRC', client.nick, nick)
 
     @staticmethod
     def add_friend_nak(client, data):
-        nick = client.username2wechat_user[data['user']].nick
+        nick = client.username2special_user[data['user']].nick
         client.status('Friend request to {} failed'.format(nick))
 
     @staticmethod
     def friend(client, data):
         debug("friend: " + ', '.join([k + ':' + repr(data['record'].get(k)) for k in ['DisplayName', 'NickName', 'UserName']]))
-        client.ensure_wechat_user(data['record'], 1)
+        client.ensure_special_user(data['record'], 1)
+
+    @staticmethod
+    def message(client, data):
+        client.ensure_special_user(data['receiver']).on_websocket_message(data)
 
     @staticmethod
     def room_contact(client, data):
         debug("room_contact: " + ', '.join([k + ':' + repr(data['record'].get(k)) for k in ['DisplayName', 'NickName', 'UserName']]))
-        client.ensure_wechat_user(data['record'], -1)
+        client.ensure_special_user(data['record'], -1)
 
     @staticmethod
     def room(client, data):
-        debug("room: " + ', '.join([k + ':' + repr(data['record'].get(k)) for k in ['DisplayName', 'NickName', 'UserName']]))
         record = data['record']
-        room = client.ensure_wechat_room(record)
-        if isinstance(record.get('MemberList'), list):
-            room.update_members(client, record['MemberList'])
+        debug('room: ' + ', '.join(k + ':' + repr(record.get(k)) for k in ['DisplayName', 'NickName', 'UserName']))
+        client.ensure_special_room(record).update_detail(record)
 
     @staticmethod
-    def web_debug(client, data):
-        debug("web_debug: " + repr(data))
-
-    @staticmethod
-    def message(client, data):
-        # receiver is a WeChat chatroom
-        if data.get('room', None):
-            client.ensure_wechat_room(data['room']) \
-                .on_websocket_message(data)
-        # receiver is a WeChat user
-        else:
-            user = client.ensure_wechat_user(data['receiver' if data['type'] == 'send' else 'sender'], 0)
-            if user:
-                user.on_websocket_message(data)
+    def room_message(client, data):
+        client.ensure_special_room(data['receiver']).on_websocket_message(data)
 
     @staticmethod
     def self(client, data):
@@ -521,12 +511,12 @@ class WeChatCommands:
     def send_file_message_nak(client, data):
         receiver = data['receiver']
         filename = data['filename']
-        if client.has_wechat_room(receiver):
-            room = client.get_wechat_room(receiver)
+        if client.has_special_room(receiver):
+            room = client.get_special_room(receiver)
             client.write(':{} PRIVMSG {} :[文件发送失败] {}'.format(
                 client.prefix, room.nick, filename))
-        elif client.has_wechat_user(receiver):
-            user = client.get_wechat_user(receiver)
+        elif client.has_special_user(receiver):
+            user = client.get_special_user(receiver)
             client.write(':{} PRIVMSG {} :[文件发送失败] {}'.format(
                 client.prefix, user.nick, filename))
 
@@ -535,22 +525,27 @@ class WeChatCommands:
     def send_text_message_nak(client, data):
         receiver = data['receiver']
         msg = data['message']
-        if client.has_wechat_room(receiver):
-            room = client.get_wechat_room(receiver)
+        if client.has_special_room(receiver):
+            room = client.get_special_room(receiver)
             client.write(':{} PRIVMSG {} :[文字发送失败] {}'.format(
                 client.prefix, room.nick, msg))
-        elif client.has_wechat_user(receiver):
-            user = client.get_wechat_user(receiver)
+        elif client.has_special_user(receiver):
+            user = client.get_special_user(receiver)
             client.write(':{} PRIVMSG {} :[文字发送失败] {}'.format(
                 client.prefix, user.nick, msg))
 
-### Channels: StandardChannel, StatusChannel, WeChatRoom
+    @staticmethod
+    def web_debug(client, data):
+        debug('web_debug: ' + repr(data))
+
+### Channels: StandardChannel, StatusChannel, SpecialChannel
 
 class Channel:
     def __init__(self, name):
         self.name = name
         self.topic = ''
         self.mode = 'n'
+        self.members = {}
 
     @property
     def prefix(self):
@@ -563,7 +558,7 @@ class Channel:
         raise NotImplemented
 
     def n_members(self, client):
-        raise NotImplemented
+        return len(self.members)
 
     def event(self, source, command, fmt, *args, include_source=True):
         line = fmt.format(*args) if args else fmt
@@ -571,8 +566,17 @@ class Channel:
             if client != source or include_source:
                 client.write(':{} {} {}'.format(source.prefix, command, line))
 
-    def deop_event(self, channel, user):
-        self.event(channel, 'MODE', '{} -o {}', channel.name, user.nick)
+    def dehalfop_event(self, user):
+        self.event(self, 'MODE', '{} -h {}', self.name, user.nick)
+
+    def deop_event(self, user):
+        self.event(self, 'MODE', '{} -o {}', self.name, user.nick)
+
+    def devoice_event(self, user):
+        self.event(self, 'MODE', '{} -v {}', self.name, user.nick)
+
+    def halfop_event(self, user):
+        self.event(self, 'MODE', '{} +h {}', self.name, user.nick)
 
     def nick_event(self, user, new):
         self.event(user, 'NICK', new)
@@ -587,14 +591,17 @@ class Channel:
             self.event(kicker, 'KICK', '{} {}', channel.name, kicked.nick)
         self.log(kicker, 'kicked %s', kicked.prefix)
 
-    def op_event(self, channel, user):
-        self.event(channel, 'MODE', '{} +o {}', channel.name, user.nick)
+    def op_event(self, user):
+        self.event(self, 'MODE', '{} +o {}', self.name, user.nick)
 
     def part_event(self, user, partmsg):
         if partmsg:
             self.event(user, 'PART', '{} :{}', self.name, partmsg)
         else:
             self.event(user, 'PART', self.name)
+
+    def voice_event(self, user):
+        self.event(user, 'MODE', '{} +v {}', self.name, user.nick)
 
     def on_invite(self, client, nick):
         # TODO
@@ -613,6 +620,20 @@ class Channel:
     def on_mode(self, client):
         client.rpl_channelmodeis(self.name, self.mode)
 
+    def on_names(self, client):
+        members = []
+        for u, mode in self.members.items():
+            nick = u.nick
+            if 'o' in mode:
+                nick = '@'+nick
+            elif 'v' in mode:
+                nick = '+'+nick
+            members.append(nick)
+        if members:
+            client.reply('353 {} = {} :{}', client.nick, self.name,
+                         ' '.join(sorted(members)))
+        client.reply('366 {} {} :End of NAMES list', client.nick, self.name)
+
     def on_topic(self, client, new=None):
         if new:
             client.err_nochanmodes(self.name)
@@ -627,13 +648,9 @@ class StandardChannel(Channel):
     def __init__(self, server, name):
         super().__init__(name)
         self.server = server
-        self.members = {}   # Client -> mode
 
     def multicast_group(self, source):
         return self.members.keys()
-
-    def n_members(self, client):
-        return len(self.members)
 
     def on_notice_or_privmsg(self, client, command, msg):
         self.event(client, command, '{} :{}', self.name, msg, include_source=False)
@@ -659,12 +676,6 @@ class StandardChannel(Channel):
                 self.kick_event(client, self, user, reason)
                 self.on_part(user, None)
 
-    def on_names(self, client):
-        client.reply('353 {} = {} :{}', client.nick, self.name,
-                     ' '.join(sorted('@'+u.nick if 'o' in m else u.nick
-                                     for u, m in self.members.items())))
-        client.reply('366 {} {} :End of NAMES list', client.nick, self.name)
-
     def on_part(self, client, msg=None):
         if client not in self.members:
             client.err_notonchannel(self.name)
@@ -676,7 +687,7 @@ class StandardChannel(Channel):
         elif 'o' in self.members.pop(client):
             user = next(iter(self.members))
             self.members[user] += 'o'
-            self.op_event(self, user)
+            self.op_event(user)
         client.leave(self)
         return True
 
@@ -698,22 +709,21 @@ class StatusChannel(Channel):
     instance = None
 
     def __init__(self, server):
-        super().__init__('+status')
+        super().__init__('+wechat')
         self.server = server
-        self.topic = "Your WeChat friends are listed here. Messages wont't be broadcasted to them. Type 'help' to see available commands"
-        self.members = set()
+        self.topic = "Your friends are listed here. Messages wont't be broadcasted to them. Type 'help' to see available commands"
         self.shadow_members = weakref.WeakKeyDictionary()
         assert not StatusChannel.instance
         StatusChannel.instance = self
 
     def multicast_group(self, source):
         client = source.client \
-            if isinstance(source, (WeChatUser, WeChatRoom)) \
+            if isinstance(source, (SpecialUser, SpecialChannel)) \
             else source
         return (client,) if client in self.members else ()
 
     def n_members(self, client):
-        return len(self.shadow_members.get(client, ())) + \
+        return len(self.shadow_members.get(client, {})) + \
             (1 if client in self.members else 0)
 
     def respond(self, client, fmt, *args):
@@ -745,29 +755,19 @@ class StatusChannel(Channel):
                 if pattern is not None and pattern not in name: continue
                 if isinstance(room, StandardChannel):
                     self.respond(client, '    ' + name)
-            self.respond(client, 'WeChat friends:')
-            for name, user in client.nick2wechat_user.items():
+            self.respond(client, '{} Friends:', im_name)
+            for name, user in client.nick2special_user.items():
                 if user.is_friend:
                     if pattern is not None and not (pattern in name or pattern in user.record.get('DisplayName', '') or pattern in user.record.get('NickName','')): continue
                     line = name + ': friend ('
                     line += ', '.join([k + ':' + repr(v) for k, v in user.record.items() if k in ['DisplayName', 'NickName']])
                     line += ')'
                     self.respond(client, '    ' + line)
-            self.respond(client, 'WeChat rooms:')
+            self.respond(client, '{} Rooms:', im_name)
             for name, room in client.channels.items():
                 if pattern is not None and pattern not in name: continue
-                if isinstance(room, WeChatRoom):
+                if isinstance(room, SpecialChannel):
                     self.respond(client, '    ' + name)
-        elif msg.startswith('web_eval'):
-            expr = None
-            ary = msg.split(' ', 1)
-            if len(ary) > 1:
-                expr = ary[1]
-            if not expr:
-                self.respond(client, 'None')
-            else:
-                Web.instance.eval_web(expr)
-                self.respond(client, 'expr sent, please use debug log to view eval result')
         elif msg.startswith('reload_friend'):
             who = None
             ary = msg.split(' ', 1)
@@ -777,6 +777,16 @@ class StatusChannel(Channel):
                 self.respond(client, 'reload_friend <name>')
             else:
                 Web.instance.reload_friend(who)
+        elif msg.startswith('web_eval'):
+            expr = None
+            ary = msg.split(' ', 1)
+            if len(ary) > 1:
+                expr = ary[1]
+            if not expr:
+                self.respond(client, 'None')
+            else:
+                Web.instance.web_eval(expr)
+                self.respond(client, 'expr sent, please use debug log to view eval result')
         else:
             m = re.match(r'eval (\S+) (.+)$', msg.strip())
             if m and m.group(1) == client.server.options.password:
@@ -793,23 +803,32 @@ class StatusChannel(Channel):
         if isinstance(member, Client):
             if member in self.members:
                 return False
-            self.members.add(member)
+            self.members[member] = ''
             super().on_join(member)
         else:
             client = member.client
             if client not in self.shadow_members:
-                self.shadow_members[client] = set()
+                self.shadow_members[client] = {}
             if member in self.shadow_members[client]:
                 return False
-            self.shadow_members[client].add(member)
             member.enter(self)
             self.join_event(member)
+            self.shadow_members[client][member] = ''
         return True
 
     def on_names(self, client):
-        members = [x.nick for x in self.shadow_members.get(client, ())]
-        members.append(client.nick)
+        members = []
+        if client in self.members:
+            members.append(client.nick)
+        for u, mode in self.shadow_members.get(client, {}).items():
+            nick = u.nick
+            if 'o' in mode:
+                nick = '@'+nick
+            elif 'v' in mode:
+                nick = '+'+nick
+            members.append(nick)
         client.reply('353 {} = {} :{}', client.nick, self.name, ' '.join(sorted(members)))
+        client.reply('366 {} {} :End of NAMES list', client.nick, self.name)
 
     def on_part(self, member, msg=None):
         if isinstance(member, Client):
@@ -818,7 +837,7 @@ class StatusChannel(Channel):
                 return False
             if msg:  # explicit PART, not disconnection
                 self.part_event(member, msg)
-            self.members.remove(member)
+            del self.members[member]
         else:
             if member not in self.shadow_members.get(member.client, ()):
                 return False
@@ -832,7 +851,7 @@ class StatusChannel(Channel):
             client.on_who_member(client, self.name)
 
 
-class WeChatRoom(Channel):
+class SpecialChannel(Channel):
     def __init__(self, client, record):
         super().__init__(None)
         self.client = client
@@ -843,15 +862,13 @@ class WeChatRoom(Channel):
         # For large chatrooms, record['MemberList']['Uin'] is very likely
         # to be 0, so the owner is hard to determine.
         # If the owner is determined, he/she is the only op
-        self.owner = None
-        self.members = set()  # room members excluding `client`, used only for listing
         self.update(client, record)
 
     def update(self, client, record):
         self.record.update(record)
         self.topic = record['DisplayName']
         old_name = getattr(self, 'name', None)
-        base = '&' + irc_escape(record['DisplayName'])
+        base = '&' + irc_escape(self.topic)
         if base == '&':
             base += '.'.join(member.nick for member in self.members)[:20]
         suffix = ''
@@ -869,48 +886,55 @@ class WeChatRoom(Channel):
             if joined:
                 self.on_join(client)
 
-    def update_members(self, client, members):
-        owner_uin = self.record.get('OwnerUin', -1)
-        owner = None
-        seen = set()
-        for member in members:
-            user = client.ensure_wechat_user(member, 0)
-            if user:
-                seen.add(user)
-                if owner_uin == user.uin:
-                    owner = user
-                if user not in self.members:
+    def update_detail(self, record):
+        if isinstance(record.get('MemberList'), list):
+            owner_uin = self.record.get('OwnerUin', -1)
+            owner = self.client if owner_uin == self.client.uin else None
+            seen = {self.client: ''}
+            for member in record['MemberList']:
+                user = self.client.ensure_special_user(member)
+                if user is not self.client:
+                    if owner_uin == user.uin:
+                        seen[user] = 'o'
+                    elif user.is_friend:
+                        seen[user] = 'v'
+                    else:
+                        seen[user] = ''
+            for user in self.members.keys() - seen.keys():
+                self.on_part(user, self.name)
+            for user in seen.keys() - self.members.keys():
+                if user is not self.client:
                     self.on_join(user)
-            elif owner_uin == client.uin:
-                owner = client
-        for user in self.members - seen:
-            self.on_part(user, self.name)
-        self.members = seen
-        if self.owner != owner:
-            # deop the old owner
-            if self.owner:
-                self.deop_event(self, self.owner)
-            self.owner = owner
-            if owner:
-                self.op_event(self, owner)
+            for user, mode in seen.items():
+                old = self.members.get(user, '')
+                if 'h' in old and 'h' not in mode:
+                    self.dehalfop_event(user)
+                if 'h' not in old and 'h' in mode:
+                    self.halfop_event(user)
+                if 'o' in old and 'o' not in mode:
+                    self.deop_event(user)
+                if 'o' not in old and 'o' in mode:
+                    self.op_event(user)
+                if 'v' in old and 'v' not in mode:
+                    self.devoice_event(user)
+                if 'v' not in old and 'v' in mode:
+                    self.voice_event(user)
+            self.members = seen
 
     def multicast_group(self, source):
         if not self.joined:
             return ()
-        if isinstance(source, (WeChatUser, WeChatRoom)):
+        if isinstance(source, (SpecialUser, SpecialChannel)):
             return (source.client,)
         return (source,)
-
-    def n_members(self, client):
-        return len(self.members) + (1 if self.joined else 0)
 
     def on_notice_or_privmsg(self, client, command, msg):
         if not client.ctcp(self.username, command, msg):
             Web.instance.send_text_message(self.username, msg)
 
     def on_invite(self, client, nick):
-        if client.has_wechat_user(nick):
-            user = client.get_wechat_user(nick)
+        if client.has_special_user(nick):
+            user = client.get_special_user(nick)
             if user in self.members:
                 client.err_useronchannel(nick, self.name)
             elif not user.is_friend:
@@ -929,25 +953,17 @@ class WeChatRoom(Channel):
         else:
             if member in self.members:
                 return False
-            self.members.add(member)
+            self.members[member] = ''
             member.enter(self)
             self.join_event(member)
         return True
 
     def on_kick(self, client, nick, reason):
-        if client.has_wechat_user(nick):
-            user = client.get_wechat_user(nick)
+        if client.has_special_user(nick):
+            user = client.get_special_user(nick)
             Web.instance.del_member(self.username, user.username)
         else:
             client.err_usernotinchannel(nick, self.name)
-
-    def on_names(self, client):
-        members = ['@'+u.nick if u == self.owner else u.nick
-                   for u in self.members]
-        members.append('@'+client.nick if client == self.owner else client.nick)
-        client.reply('353 {} = {} :{}', client.nick, self.name,
-                     ' '.join(sorted(members)))
-        client.reply('366 {} {} :End of NAMES list', client.nick, self.name)
 
     def on_part(self, member, msg=None):
         if isinstance(member, Client):
@@ -961,7 +977,7 @@ class WeChatRoom(Channel):
             if member not in self.members:
                 return False
             self.part_event(member, msg)
-            self.members.remove(member)
+            del self.members[member]
         member.leave(self)
         return True
 
@@ -987,21 +1003,15 @@ class WeChatRoom(Channel):
                 self.client.auto_join(self)
         if not self.joined:
             return
+        sender = self.client.ensure_special_user(data['sender'])
+        if not sender:
+            return
+        if sender not in self.members:
+            self.on_join(sender)
         for line in msg.splitlines():
-            if data['type'] == 'send':
-                # server generated messages have been filtered by client-side JS
-                self.client.write(':{} PRIVMSG {} :{}'.format(
-                    self.client.prefix, self.name, line))
-            else:
-                # For chatroom events, sender is the same as receiver, e.g. 你邀请xxx加入了群聊
-                if data['sender'] == self.username:
-                    self.client.write(':{} PRIVMSG {} :{}'.format(
-                        self.prefix, self.name, line))
-                else:
-                    sender = self.client.ensure_wechat_user(data['sender'], 0)
-                    if sender:
-                        self.client.write(':{} PRIVMSG {} :{}'.format(
-                            sender.nick, self.name, line))
+            self.client.write(':{} PRIVMSG {} :{}'.format(
+                sender.prefix,
+                self.name, line))
 
 
 class Client:
@@ -1019,10 +1029,10 @@ class Client:
         self.registered = False
         self.mode = ''
         self.channels = {}              # joined, name -> channel
-        self.name2wechat_room = {}      # name -> WeChat chatroom
-        self.username2wechat_room = {}  # UserName -> WeChatRoom
-        self.nick2wechat_user = {}      # nick -> IRC user or WeChat user (friend or room contact)
-        self.username2wechat_user = {}  # UserName -> WeChatUser
+        self.name2special_room = {}      # name -> WeChat chatroom
+        self.username2special_room = {}  # UserName -> SpecialChannel
+        self.nick2special_user = {}      # nick -> IRC user or WeChat user (friend or room contact)
+        self.username2special_user = {}  # UserName -> SpecialUser
         self.uin = 0
         self.username = ''
 
@@ -1041,22 +1051,22 @@ class Client:
                 return
         room.on_join(self)
 
-    def has_wechat_user(self, nick):
-        return irc_lower(nick) in self.nick2wechat_user
+    def has_special_user(self, nick):
+        return irc_lower(nick) in self.nick2special_user
 
-    def has_wechat_room(self, name):
-        return irc_lower(name) in self.name2wechat_room
+    def has_special_room(self, name):
+        return irc_lower(name) in self.name2special_room
 
-    def get_wechat_user(self, nick):
-        return self.nick2wechat_user[irc_lower(nick)]
+    def get_special_user(self, nick):
+        return self.nick2special_user[irc_lower(nick)]
 
-    def get_wechat_room(self, name):
-        return self.name2wechat_room[irc_lower(name)]
+    def get_special_room(self, name):
+        return self.name2special_room[irc_lower(name)]
 
-    def remove_wechat_user(self, nick):
-        del self.nick2wechat_user[irc_lower(nick)]
+    def remove_special_user(self, nick):
+        del self.nick2special_user[irc_lower(nick)]
 
-    def ensure_wechat_user(self, record, friend):
+    def ensure_special_user(self, record, friend=0):
         assert isinstance(record['UserName'], str)
         assert isinstance(record.get('DisplayName', ''), str)
         assert isinstance(record.get('Uin', 0), int)
@@ -1064,15 +1074,15 @@ class Client:
             uin = record.get('Uin', 0)
             if uin:
                 self.uin = uin
-            return None
-        if record['UserName'] in self.username2wechat_user:
-            user = self.username2wechat_user[record['UserName']]
-            self.remove_wechat_user(user.nick)
+            return self
+        if record['UserName'] in self.username2special_user:
+            user = self.username2special_user[record['UserName']]
+            self.remove_special_user(user.nick)
             user.update(self, record, friend)
         else:
-            user = WeChatUser(self, record, friend)
-            self.username2wechat_user[user.username] = user
-        self.nick2wechat_user[irc_lower(user.nick)] = user
+            user = SpecialUser(self, record, friend)
+            self.username2special_user[user.username] = user
+        self.nick2special_user[irc_lower(user.nick)] = user
         return user
 
     def is_in_channel(self, name):
@@ -1084,20 +1094,20 @@ class Client:
     def remove_channel(self, channelname):
         del self.channels[irc_lower(channelname)]
 
-    def ensure_wechat_room(self, record):
+    def ensure_special_room(self, record):
         assert isinstance(record['UserName'], str)
         assert isinstance(record['DisplayName'], str)
         assert isinstance(record.get('OwnerUin', -1), int)
-        if record['UserName'] in self.username2wechat_room:
-            room = self.username2wechat_room[record['UserName']]
-            del self.name2wechat_room[irc_lower(room.name)]
+        if record['UserName'] in self.username2special_room:
+            room = self.username2special_room[record['UserName']]
+            del self.name2special_room[irc_lower(room.name)]
             room.update(self, record)
         else:
-            room = WeChatRoom(self, record)
-            self.username2wechat_room[room.username] = room
+            room = SpecialChannel(self, record)
+            self.username2special_room[room.username] = room
             if self.options.join == 'all':
                 self.auto_join(room)
-        self.name2wechat_room[irc_lower(room.name)] = room
+        self.name2special_room[irc_lower(room.name)] = room
         return room
 
     def disconnect(self, quitmsg):
@@ -1323,33 +1333,39 @@ class Client:
 
     def on_websocket(self, data):
         command = data['command']
-        if type(WeChatCommands.__dict__.get(command)) == staticmethod:
-            getattr(WeChatCommands, command)(self, data)
+        if type(SpecialCommands.__dict__.get(command)) == staticmethod:
+            getattr(SpecialCommands, command)(self, data)
 
     def on_websocket_open(self, peername):
         status = StatusChannel.instance
         #self.status('WebSocket client connected from {}'.format(peername))
 
     def on_websocket_close(self, peername):
-        # PART all WeChat chatrooms, these chatrooms will be garbage collected
-        for room in self.username2wechat_room.values():
+        # PART all special channels, these chatrooms will be garbage collected
+        for room in self.username2special_room.values():
             if room.joined:
                 room.on_part(self, 'WebSocket client disconnection')
-        self.name2wechat_room.clear()
-        self.username2wechat_room.clear()
+        self.name2special_room.clear()
+        self.username2special_room.clear()
 
-        # instead of flooding +status with massive PART messages,
+        # instead of flooding +wechat with massive PART messages,
         # take the shortcut by rejoining the client
-        self.nick2wechat_user.clear()
-        self.username2wechat_user.clear()
+        self.nick2special_user.clear()
+        self.username2special_user.clear()
         status = StatusChannel.instance
         status.shadow_members.get(self, set()).clear()
         if self in status.members:
             status.on_part(self, 'WebSocket client disconnected from {}'.format(peername))
             status.on_join(self)
 
+    def on_websocket_message(self, data):
+        msg = data['message']
+        sender = self.ensure_special_user(data['sender'])
+        for line in msg.splitlines():
+            self.write(':{} PRIVMSG {} :{}'.format(
+                sender.prefix, self.nick, line))
 
-class WeChatUser:
+class SpecialUser:
     def __init__(self, client, record, friend):
         self.client = client
         self.username = record['UserName']
@@ -1361,15 +1377,9 @@ class WeChatUser:
 
     @property
     def prefix(self):
-        return '{}!{}@WeChat'.format(self.nick, self.username.replace('@', ''))
+        return '{}!{}@{}'.format(self.nick, self.username.replace('@', ''), im_name)
 
-    def update(self, client, record, friend):
-        if not self.record or 'RemarkName' in record:
-            self.record.update(record)
-            uin = self.record.get('Uin', 0)
-            if uin > 0:
-                self.uin = uin
-        old_nick = getattr(self, 'nick', None)
+    def name(self):
         # items in MemberList do not have 'DisplayName' or 'RemarkName'
         if self.username.startswith('@'):
             base = re.sub('^[&#!+]*', '', irc_escape(self.record.get('DisplayName', '')))
@@ -1378,12 +1388,22 @@ class WeChatUser:
             base = irc_escape(self.username)
         if not base:
             base = 'Guest'
+        return base
+
+    def update(self, client, record, friend):
+        if not self.record or 'RemarkName' in record:
+            self.record.update(record)
+            uin = self.record.get('Uin', 0)
+            if uin > 0:
+                self.uin = uin
+        old_nick = getattr(self, 'nick', None)
+        base = irc_escape(self.name()) or 'Guest'
         suffix = ''
         while 1:
             nick = base+suffix
             if nick and (nick == old_nick or
                          irc_lower(nick) != irc_lower(client.nick) and
-                         not client.has_wechat_user(nick)):
+                         not client.has_special_user(nick)):
                 break
             suffix = str(int(suffix or 0)+1)
         if nick != old_nick:
@@ -1395,11 +1415,19 @@ class WeChatUser:
             if not self.is_friend:
                 self.is_friend = True
                 StatusChannel.instance.on_join(self)
+                for channel in self.channels:
+                    if isinstance(channel, SpecialChannel):
+                        channel.members[self] = 'v'
+                        channel.voice_event(self)
         # non_friend
         elif friend < 0:
             if self.is_friend:
                 self.is_friend = False
                 StatusChannel.instance.on_part(self)
+                for channel in self.channels:
+                    if isinstance(channel, SpecialChannel):
+                        channel.members[self] = ''
+                        channel.devoice_event(self)
         # unsure
 
     def enter(self, channel):
@@ -1414,28 +1442,24 @@ class WeChatUser:
 
     def on_who_member(self, client, channelname):
         client.reply('352 {} {} {} {} {} {} H :0 {}', client.nick, channelname,
-                     self.username, 'WeChat', client.server.name,
+                     self.username, im_name, client.server.name,
                      self.nick, self.username)
 
     def on_whois(self, client):
         client.reply('311 {} {} {} {} * :{}', client.nick, self.nick,
-                     self.username, 'WeChat', self.record.get('NickName', ''))
+                     self.username, im_name, self.record.get('NickName', ''))
 
     def on_websocket_message(self, data):
         msg = data['message']
         for line in msg.splitlines():
-            if data['type'] == 'send':
-                self.client.write(':{} PRIVMSG {} :{}'.format(
-                    self.client.prefix, self.nick, line))
-            else:
-                self.client.write(':{} PRIVMSG {} :{}'.format(
-                    self.prefix, self.client.nick, line))
+            self.client.write(':{} PRIVMSG {} :{}'.format(
+                self.client.prefix, self.nick, line))
 
 
 class Server:
     valid_nickname = re.compile(r"^[][\`_^{|}A-Za-z][][\`_^{|}A-Za-z0-9-]{0,50}$")
     # initial character `+` is reserved for special channels
-    # initial character `&` is reserved for WeChat chatrooms
+    # initial character `&` is reserved for special chatrooms
     valid_channelname = re.compile(r"^[#!][^\x00\x07\x0a\x0d ,:]{0,50}$")
     instance = None
 
@@ -1471,7 +1495,7 @@ class Server:
     def get_channel(self, channelname):
         return self.channels[irc_lower(channelname)]
 
-    # IRC channel or WeChat chatroom
+    # IRC channel or special chatroom
     def ensure_channel(self, channelname):
         if self.has_channel(channelname):
             return self.channels[irc_lower(channelname)]
@@ -1486,7 +1510,7 @@ class Server:
 
     def change_nick(self, client, new):
         lower = irc_lower(new)
-        if lower in self.nicks or lower in client.nick2wechat_user:
+        if lower in self.nicks or lower in client.nick2special_user:
             client.err_nicknameinuse(new)
         elif not Server.valid_nickname.match(new):
             client.err_errorneusnickname(new)
@@ -1529,11 +1553,11 @@ def main():
     ap = ArgumentParser(description='wechatircd brings wx.qq.com to IRC clients')
     ap.add_argument('-d', '--debug', action='store_true', help='run ipdb on uncaught exception')
     ap.add_argument('-I', '--ignore-display-name', nargs='*',
-                    help='list of ignored regex, do not auto join to a WeChat chatroom whose DisplayName matches')
+                    help='list of ignored regex, do not auto join to a '+im_name+' chatroom whose DisplayName matches')
     ap.add_argument('-i', '--ignore', nargs='*',
-                    help='list of ignored regex, do not auto join to a WeChat chatroom whose channel name(generated from DisplayName) matches')
+                    help='list of ignored regex, do not auto join to a '+im_name+' chatroom whose channel name(generated from DisplayName) matches')
     ap.add_argument('-j', '--join', choices=['all', 'auto', 'manual'], default='auto',
-                    help='join mode for WeChat chatrooms. all: join all after connected; auto: join after the first message arrives; manual: no automatic join')
+                    help='join mode for '+im_name+' chatrooms. all: join all after connected; auto: join after the first message arrives; manual: no automatic join')
     ap.add_argument('-l', '--listen', nargs='*', default=['127.0.0.1'],
                     help='IRC/HTTP/WebSocket listen addresses')
     ap.add_argument('--listen-ircd', nargs='*',
