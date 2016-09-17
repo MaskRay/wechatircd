@@ -47,8 +47,17 @@ class Web(object):
         assert not Web.instance
         Web.instance = self
 
+    async def handle_index(self, request):
+        with open(os.path.join(self.http_root, 'index.html'), 'rb') as f:
+            return web.Response(body=f.read())
+
     async def handle_app_js(self, request):
         with open(os.path.join(self.http_root, 'webwxapp.js'), 'rb') as f:
+            return web.Response(body=f.read(),
+                                headers={'Content-Type': 'application/javascript; charset=UTF-8',
+                                         'Access-Control-Allow-Origin': '*'})
+    async def handle_injector_js(self, request):
+        with open(os.path.join(self.http_root, 'injector.js'), 'rb') as f:
             return web.Response(body=f.read(),
                                 headers={'Content-Type': 'application/javascript; charset=UTF-8',
                                          'Access-Control-Allow-Origin': '*'})
@@ -84,9 +93,10 @@ class Web(object):
     def start(self, listens, port, tls, loop):
         self.loop = loop
         self.app = aiohttp.web.Application()
-        self.app.router.add_route('GET', '/', self.handle_web_socket)
-        self.app.router.add_route(
-            'GET', '/webwxapp.js', self.handle_app_js)
+        self.app.router.add_route('GET', '/', self.handle_index)
+        self.app.router.add_route('GET', '/webwxapp.js', self.handle_app_js)
+        self.app.router.add_route('GET', '/injector.js', self.handle_injector_js)
+        self.app.router.add_route('GET', '/ws', self.handle_web_socket)
         self.handler = self.app.make_handler()
         self.srv = []
         for i in listens:
@@ -126,8 +136,6 @@ class Web(object):
                     'command': 'send_text_message',
                     'receiver': receiver,
                     'message': msg,
-                    # @ webwxapp.js /e.ClientMsgId = e.LocalID = e.MsgId = (utilFactory.now() + Math.random().toFixed(3)).replace(".", ""),
-                    'local_id': '{}0{:03}'.format(int(time.time()*1000), random.randint(0, 999)),
                 }))
             except:
                 pass
@@ -245,10 +253,10 @@ class RegisteredCommands:
     @staticmethod
     def info(client):
         client.rpl_info('{} users', len(client.server.nicks))
-        client.rpl_info('{} {} users', im_name, len(client.username2special_user))
+        client.rpl_info('{} {} users', im_name, len(client.nick2special_user))
         client.rpl_info('{} {} friends', im_name,
                         len(StatusChannel.instance.shadow_members.get(client, {})))
-        client.rpl_info('{} {} rooms', im_name, len(client.username2special_room))
+        client.rpl_info('{} {} rooms', im_name, len(client.name2special_room))
 
     @staticmethod
     def invite(client, nick, channelname):
@@ -296,7 +304,7 @@ class RegisteredCommands:
                         client.has_special_room(channelname)]
         else:
             channels = set(client.channels.values())
-            for channel in client.username2special_room.values():
+            for channel in client.name2special_room.values():
                 channels.add(channel)
             channels = list(channels)
         channels.sort(key=lambda ch: ch.name)
@@ -309,7 +317,7 @@ class RegisteredCommands:
     def lusers(client):
         client.reply('251 :There are {} users and {} {} users (local to you) on 1 server',
                      len(client.server.nicks),
-                     len(client.username2special_user),
+                     len(client.nick2special_user),
                      im_name
                      )
 
@@ -481,8 +489,9 @@ class SpecialCommands:
 
     @staticmethod
     def friend(client, data):
-        debug("friend: " + ', '.join([k + ':' + repr(data['record'].get(k)) for k in ['DisplayName', 'NickName', 'UserName']]))
-        client.ensure_special_user(data['record'], 1)
+        record = data['record']
+        debug('friend: ' + ', '.join([k + ':' + repr(record.get(k)) for k in ['DisplayName', 'NickName', 'UserName']]))
+        client.ensure_special_user(record, 1)
 
     @staticmethod
     def message(client, data):
@@ -490,7 +499,8 @@ class SpecialCommands:
 
     @staticmethod
     def room_contact(client, data):
-        debug("room_contact: " + ', '.join([k + ':' + repr(data['record'].get(k)) for k in ['DisplayName', 'NickName', 'UserName']]))
+        record = data['record']
+        debug('room_contact: ' + ', '.join([k + ':' + repr(record.get(k)) for k in ['DisplayName', 'NickName', 'UserName']]))
         client.ensure_special_user(data['record'], -1)
 
     @staticmethod
@@ -888,8 +898,7 @@ class SpecialChannel(Channel):
 
     def update_detail(self, record):
         if isinstance(record.get('MemberList'), list):
-            owner_uin = self.record.get('OwnerUin', -1)
-            owner = self.client if owner_uin == self.client.uin else None
+            owner_uin = record.get('OwnerUin', -1)
             seen = {self.client: ''}
             for member in record['MemberList']:
                 user = self.client.ensure_special_user(member)
@@ -1028,7 +1037,7 @@ class Client:
         self.nick = None
         self.registered = False
         self.mode = ''
-        self.channels = {}              # joined, name -> channel
+        self.channels = {}               # joined, name -> channel
         self.name2special_room = {}      # name -> WeChat chatroom
         self.username2special_room = {}  # UserName -> SpecialChannel
         self.nick2special_user = {}      # nick -> IRC user or WeChat user (friend or room contact)
@@ -1342,7 +1351,7 @@ class Client:
 
     def on_websocket_close(self, peername):
         # PART all special channels, these chatrooms will be garbage collected
-        for room in self.username2special_room.values():
+        for room in self.name2special_room.values():
             if room.joined:
                 room.on_part(self, 'WebSocket client disconnection')
         self.name2special_room.clear()
@@ -1386,9 +1395,7 @@ class SpecialUser:
         # special contacts, e.g. filehelper
         else:
             base = irc_escape(self.username)
-        if not base:
-            base = 'Guest'
-        return base
+        return base or 'Guest'
 
     def update(self, client, record, friend):
         if not self.record or 'RemarkName' in record:
@@ -1397,7 +1404,7 @@ class SpecialUser:
             if uin > 0:
                 self.uin = uin
         old_nick = getattr(self, 'nick', None)
-        base = irc_escape(self.name()) or 'Guest'
+        base = self.name()
         suffix = ''
         while 1:
             nick = base+suffix

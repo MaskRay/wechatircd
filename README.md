@@ -4,7 +4,7 @@ wechatircd类似于bitlbee，在微信网页版和IRC间建起桥梁，可以使
 
 ## 原理
 
-修改微信网页版用的JS，通过WebSocket把信息发送到服务端，服务端兼做IRC服务端，把IRC客户端的命令通过WebSocket传送到网页版JS执行。未实现IRC客户端，因此无法把微信群的消息转发到另一个IRC服务器(打通两个群的bot)。
+访问微信网页版时用userscript `injector.user.js`加载`injector.js`，通过WebSocket与服务端通信。服务端兼做IRC服务器，从而可以让IRC客户端控制网页版。未实现IRC客户端，因此无法把微信群的消息转发到另一个IRC服务器(打通两个群的bot)。
 
 ## 安装
 
@@ -28,22 +28,23 @@ wechatircd类似于bitlbee，在微信网页版和IRC间建起桥梁，可以使
 Chrome/Chromium
 
 - 访问`chrome://settings/certificates`，导入a.crt，在Authorities标签页选择该证书，Edit->Trust this certificate for identifying websites.
-- 安装Switcheroo Redirector Plus扩展，选择regular expression匹配方式，把<https://res.wx.qq.com/zh_CN/htmledition/v2/js/webwxApp.*.js>重定向至<https://127.0.0.1:9000/webwxapp.js>。网页版js更新后URL会变化。
+- 安装Tampermonkey扩展，点击<https://github.com/MaskRay/wechatircd/raw/master/injector.user.js>安装userscript，效果是在<https://wx.qq.com>页面注入<https://127.0.0.1:9000/injector.js>
 
 Firefox
 
-- 安装Redirector扩展，重定向js，设置` Applies to: Main window (address bar), Scripts`。（对于默认配置可直接导入配置文件: [Redirector.json](Redirector.json)）
-- 访问重定向后的js URL，报告Your connection is not secure，Advanced->Add Exception->Confirm Security Exception
+- 访问<https://127.0.0.1:9000/injector.js>，报告Your connection is not secure，Advanced->Add Exception->Confirm Security Exception
+- 安装Greasemonkey扩展，安装userscript
 
 ![](https://maskray.me/static/2016-02-21-wechatircd/run.jpg)
+
+HTTPS、WebSocket over TLS默认用9000端口，使用其他端口需要修改userscript，启动`wechatircd.py`时用`--web-port 10000`指定其他端口。
 
 ### 无TLS(不推荐)
 
 如果嫌X.509太麻烦的话可以不用TLS，但浏览器可能会在console里给出警告甚至拒绝。
 
-- 执行`./wechatircd.py`，会监听127.1:6667的IRC和127.1:9000的HTTP与WebSocket，HTTP用于伺服项目根目录下的`webwxapp.js`。
-- 重定向js，`https://`改成`http://`
-- 把`webwxapp.js` `var ws = new MyWebSocket('wss://127.0.0.1:9000')`行单引号里面的部分修改成`ws://127.0.0.1:9000`
+- 执行`./wechatircd.py`，会监听127.1:6667的IRC和127.1:9000的HTTP与WebSocket，HTTP用于伺服项目根目录下的`injector.js`。
+- 安装userscript
 
 ## 使用
 
