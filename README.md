@@ -51,7 +51,7 @@ HTTPS、WebSocket over TLS默认用9000端口，使用其他端口需要修改us
 - 登录<https://wx.qq.com>，会自动发起WebSocket连接。若打开多个，只有第一个生效
 - IRC客户端连接127.1:6667(weechat的话使用`/server add wechat 127.1/6667`)，会自动加入`+wechat` channel
 
-在`+telegram`发信并不会群发，只是为了方便查看有哪些朋友。
+在`+wechat`发信并不会群发，只是为了方便查看有哪些朋友。
 微信朋友的nick优先选取备注名(`RemarkName`)，其次为`DisplayName`(原始JS根据昵称等自动填写的一个名字)
 
 在`+wechat` channel可以执行一些命令：
