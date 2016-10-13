@@ -2,7 +2,7 @@
 from argparse import ArgumentParser, Namespace
 from aiohttp import web
 #from ipdb import set_trace as bp
-from datetime import datetime
+from datetime import datetime, timezone
 import aiohttp, asyncio, inspect, json, logging.handlers, os, pprint, random, re, \
     signal, socket, ssl, string, sys, time, traceback, uuid, weakref
 
@@ -229,6 +229,16 @@ def irc_escape(s):
 
 class UnregisteredCommands(object):
     @staticmethod
+    def cap(client, *args):
+        if not args: return
+        comm = args[0].lower()
+        if comm == 'ls' or comm == 'list':
+            client.reply('CAP * {} :server-time', args[0])
+        elif comm == 'req':
+            client.capabilities = set(['server-time']) & set(args[1].split())
+            client.reply('CAP * ACK :{}', ' '.join(client.capabilities))
+
+    @staticmethod
     def nick(client, *args):
         if not args:
             client.err_nonicknamegiven()
@@ -249,6 +259,10 @@ class RegisteredCommands:
     @staticmethod
     def away(client):
         pass
+
+    @staticmethod
+    def cap(client, *args):
+        UnregisteredCommands.cap(client, *args)
 
     @staticmethod
     def info(client):
@@ -1018,9 +1032,15 @@ class SpecialChannel(Channel):
         if sender not in self.members:
             self.on_join(sender)
         for line in msg.splitlines():
-            self.client.write(':{} PRIVMSG {} :{}'.format(
-                sender.prefix,
-                self.name, line))
+            if 'server-time' in self.client.capabilities:
+                self.client.write('@time={}Z :{} PRIVMSG {} :{}'.format(
+                    datetime.fromtimestamp(data['time'], timezone.utc).strftime('%FT%T.%f')[:23],
+                    sender.prefix,
+                    self.name, line))
+            else:
+                self.client.write(':{} PRIVMSG {} :{}'.format(
+                    sender.prefix,
+                    self.name, line))
 
 
 class Client:

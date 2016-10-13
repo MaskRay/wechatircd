@@ -96,8 +96,6 @@ Emoji在网页上呈现时为`<img class="emoji emoji1f604" text="_web" src="
 
 ## JS改动
 
-原始文件`orig/webwxApp*.js`在Chrome DevTools里格式化后得到`orig/webwxApp*.pretty.js`，可以用`diff -u orig/webwxApp*.pretty.js webwxapp.js`查看改动。
-
 修改的地方都有`//@`标注，结合diff，方便微信网页版JS更新后重新应用这些修改。增加的代码中大多数地方都用`try catch`保护，出错则`consoleerr(ex.stack)`。原始JS把`console`对象抹掉了……`consoleerr`是我保存的一个副本。
 
 目前的改动如下：
@@ -136,21 +134,20 @@ Emoji在网页上呈现时为`<img class="emoji emoji1f604" text="_web" src="
 │   ├── RegisteredCommands   注册后可用命令
 ```
 
+## IRCv3
+
+支持IRC version 3.1和3.2的`server-time`，`wechatircd.py`传递消息时带上创建时刻，客户端显示消息创建时刻而不是收到消息的时刻。参见<http://ircv3.net/irc/>。IRCv3客户端支持参见<http://ircv3.net/software/clients.html>。
+
+WeeChat配置如下：
+```
+/set irc.server_default.capabilities "account-notify,away-notify,cap-notify,multi-prefix,server-time,znc.in/server-time-iso,znc.in/self-message"
+```
+
 ## FAQ
 
 ### 使用这个方法的理由
 
 原本想研究微信网页版登录、收发消息的协议，自行实现客户端。参考过<https://github.com/0x5e/wechat-deleted-friends>，仿制了<https://gist.github.com/MaskRay/3b5b3fcbccfcba3b8f29>，可以登录。但根据minify后JS把相关部分重写非常困难，错误处理很麻烦，所以就让网页版JS自己来传递信息。
-
-### 为什么用扩展实现JS重定向？
-
-微信网页版使用AngularJS，不知道如何优雅地monkey patch AngularJS……一旦原JS执行了，bootstrap了整个页面，我不知道如何用后执行的`<script>`修改它的行为。
-
-因此原来打算用UserScript阻止该`<script>`标签的执行，三个时机里`@run-at document-begin`看不到`<body>`；`document-body`时`<body>`可能只部分加载了，旧`<script>`标签已经在加载过程中，添加修改后的`<script>`没法保证在旧`<script>`前执行；`@run-at document-end`则完全迟了。
-
-另外可以在`@run-at document-begin`时`window.stop()`阻断页面加载，然后换血，替换整个`document.documentElement`，先加载自己的小段JS，再加载<https://res.wx.qq.com/zh_CN/htmledition/v2/js/{libs*,webwxApp*}.js>，详见<http://stackoverflow.com/questions/11638509/chrome-extension-remove-script-tags>。我不知道如何控制顺序。另外，两个原有JS的HTTP回应中`Access-Control-Allow-Origin: wx.qq.com`格式不对，浏览器会拒绝XMLHttpRequest加载。
-
-Firefox支持beforescriptexecute事件，可以用UserScript实现劫持、更换`<script>`。
 
 ### 用途
 

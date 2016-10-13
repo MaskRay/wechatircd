@@ -2,7 +2,12 @@
 const Common = {
   EMOJI_MAXIUM_SIZE: 120,
   WEBSOCKET_URL: 'wss://127.0.0.1:9000/ws',
-  DEBUG: true,
+  DEBUG: false,
+}
+
+const console2 = {
+  log: console.log,
+  error: console.error,
 }
 
 class CtrlServer {
@@ -88,10 +93,10 @@ class CtrlServer {
             skey: accountFactory.getSkey()
           }))
         }).done(() => {
-          console.log('+ add_friend_ack')
+          console2.log('+ add_friend_ack')
           this.send({command: 'add_friend_ack', user: data.user})
         }).fail(() => {
-          console.error('- add_friend_nak')
+          console2.error('- add_friend_nak')
           this.send({command: 'add_friend_nak', user: data.user})
         })
         break
@@ -140,7 +145,7 @@ class CtrlServer {
         }).done((res) => {
           res = JSON.parse(res)
           if (res.BaseResponse.Ret === 0 && res.MediaId) {
-            console.log('+ API_webwxuploadmedia done')
+            console2.log('+ API_webwxuploadmedia done')
             let ext = data.filename.match(/\.(\w+)$/)
             ext = ext ? ext[1] : ''
             let old = chatFactory.getCurrentUserName()
@@ -174,7 +179,7 @@ class CtrlServer {
       case 'send_text_message':
         let old = chatFactory.getCurrentUserName()
         try {
-          console.log("send_text_message", old, data.receiver);
+          console2.log("send_text_message", old, data.receiver);
           chatFactory.setCurrentUserName(data.receiver)
           this.localID = (utilFactory.now() + Math.random().toFixed(3)).replace(".", "")
           this.seenLocalID.add(this.localID)
@@ -182,7 +187,7 @@ class CtrlServer {
           editArea.sendTextMessage()
         } catch (ex) {
           this.send({command: 'web_debug', message: 'send text message exception: '  + ex.message + "\nstack: " + ex.stack})
-          console.error(ex.stack)
+          console2.error(ex.stack)
         } finally {
           this.localID = null
           chatFactory.setCurrentUserName(old)
@@ -220,7 +225,7 @@ class CtrlServer {
       }
     } catch (ex) {
       this.send({command: 'web_debug', message: 'handle message exception: '  + ex.message + "\nstack: " + ex.stack})
-      console.error(ex.stack)
+      console2.error(ex.stack)
     }
   }
 
@@ -387,7 +392,6 @@ class Injector {
         Object.defineProperty(chatFactory, 'createMessage', {
           set: () => {},
           get: () => function (e) {
-            console.log("hook chatFactory.createMessage", e);
             return Injector.chatFactoryCreateMessage.call(chatFactory, chatFactoryCreateMessageReal).apply(null, arguments)
           }
         })
@@ -397,7 +401,6 @@ class Injector {
         Object.defineProperty(chatFactory, 'messageProcess', {
           set: () => {},
           get: () => function(e) {
-            console.log('hook chatFactory.messageProcess', e);
             return Injector.chatFactoryMessageProcess.call(chatFactory, chatFactoryMessageProcessReal).apply(null, arguments)
           }
         })
@@ -600,14 +603,18 @@ class Injector {
                           window.ctrlServer.send({command: 'room_message',
                                   sender: sender,
                                   receiver: receiver,
-                                  message: content})
+                                  message: content,
+                                  time: e.CreateTime
+                          })
                           // 发送成功(无异常)则标记为已读
                           e.MMUnread = false
                       } else if (! sender.isBrandContact()) {
                           window.ctrlServer.send({command: 'message',
                                   sender: sender,
                                   receiver: receiver,
-                                  message: content})
+                                  message: content,
+                                  time: e.CreateTime
+                          })
                           e.MMUnread = false
                       }
                   }
