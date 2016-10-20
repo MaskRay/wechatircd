@@ -1032,7 +1032,7 @@ class SpecialChannel(Channel):
         if sender not in self.members:
             self.on_join(sender)
         for line in msg.splitlines():
-            if 'server-time' in self.client.capabilities:
+            if 'server-time' in getattr(self.client, 'capabilities', set())::
                 self.client.write('@time={}Z :{} PRIVMSG {} :{}'.format(
                     datetime.fromtimestamp(data['time'], timezone.utc).strftime('%FT%T.%f')[:23],
                     sender.prefix,
