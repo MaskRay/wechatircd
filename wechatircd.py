@@ -887,6 +887,11 @@ class SpecialChannel(Channel):
         # to be 0, so the owner is hard to determine.
         # If the owner is determined, he/she is the only op
         self.update(client, record)
+        self.log_file = None
+
+    @property
+    def nick(self):
+        return self.name
 
     def update(self, client, record):
         self.record.update(record)
@@ -953,6 +958,7 @@ class SpecialChannel(Channel):
 
     def on_notice_or_privmsg(self, client, command, msg):
         if not client.ctcp(self.username, command, msg):
+            client.server.irc_log(self, datetime.now(), client, msg)
             Web.instance.send_text_message(self.username, msg)
 
     def on_invite(self, client, nick):
@@ -1032,15 +1038,14 @@ class SpecialChannel(Channel):
         if sender not in self.members:
             self.on_join(sender)
         for line in msg.splitlines():
-            if 'server-time' in getattr(self.client, 'capabilities', set()):
+            self.client.server.irc_log(self, datetime.fromtimestamp(data['time']), sender, line)
+            if 'server-time' in self.client.capabilities:
                 self.client.write('@time={}Z :{} PRIVMSG {} :{}'.format(
                     datetime.fromtimestamp(data['time'], timezone.utc).strftime('%FT%T.%f')[:23],
-                    sender.prefix,
-                    self.name, line))
+                    sender.prefix, self.name, line))
             else:
                 self.client.write(':{} PRIVMSG {} :{}'.format(
-                    sender.prefix,
-                    self.name, line))
+                    sender.prefix, self.name, line))
 
 
 class Client:
@@ -1064,6 +1069,7 @@ class Client:
         self.username2special_user = {}  # UserName -> SpecialUser
         self.uin = 0
         self.username = ''
+        self.capabilities = set()
 
     def enter(self, channel):
         self.channels[irc_lower(channel.name)] = channel
@@ -1391,8 +1397,14 @@ class Client:
         msg = data['message']
         sender = self.ensure_special_user(data['sender'])
         for line in msg.splitlines():
-            self.write(':{} PRIVMSG {} :{}'.format(
-                sender.prefix, self.nick, line))
+            self.server.irc_log(sender, datetime.fromtimestamp(data['time']), sender, line)
+            if 'server-time' in self.capabilities:
+                self.write('@time={}Z :{} PRIVMSG {} :{}'.format(
+                    datetime.fromtimestamp(data['time'], timezone.utc).strftime('%FT%T.%f')[:23],
+                    sender.prefix, self.nick, line))
+            else:
+                self.write(':{} PRIVMSG {} :{}'.format(
+                    sender.prefix, self.nick, line))
 
 class SpecialUser:
     def __init__(self, client, record, friend):
@@ -1403,6 +1415,7 @@ class SpecialUser:
         self.record = {}
         self.uin = 0
         self.update(client, record, friend)
+        self.log_file = None
 
     @property
     def prefix(self):
@@ -1465,6 +1478,7 @@ class SpecialUser:
 
     def on_notice_or_privmsg(self, client, command, msg):
         if not client.ctcp(self.username, command, msg):
+            client.server.irc_log(self, datetime.now(), client, msg)
             Web.instance.send_text_message(self.username, msg)
 
     def on_who_member(self, client, channelname):
@@ -1479,8 +1493,14 @@ class SpecialUser:
     def on_websocket_message(self, data):
         msg = data['message']
         for line in msg.splitlines():
-            self.client.write(':{} PRIVMSG {} :{}'.format(
-                self.client.prefix, self.nick, line))
+            self.client.server.irc_log(self, datetime.fromtimestamp(data['time']), self.client, line)
+            if 'server-time' in self.client.capabilities:
+                self.client.write('@time={}Z :{} PRIVMSG {} :{}'.format(
+                    datetime.fromtimestamp(data['time'], timezone.utc).strftime('%FT%T.%f')[:23],
+                    self.client.prefix, self.nick, line))
+            else:
+                self.client.write(':{} PRIVMSG {} :{}'.format(
+                    self.client.prefix, self.nick, line))
 
 
 class Server:
@@ -1575,6 +1595,22 @@ class Server:
         for client in self.clients:
             client.on_websocket(data)
 
+    def irc_log(self, channel, local_time, sender, line):
+        if self.options.logger_mask is None:
+            return
+        for regex in self.options.logger_ignore or []:
+            if re.search(regex, channel.name):
+                return
+        filename = local_time.strftime(self.options.logger_mask.replace('$channel', channel.nick))
+        time_str = local_time.strftime((self.options.logger_time_format or '%H:%M').replace('$channel', channel.nick))
+        if channel.log_file is None or channel.log_file.name != filename:
+            if channel.log_file is not None:
+                channel.log_file.close()
+            os.makedirs(os.path.dirname(filename), exist_ok=True)
+            channel.log_file = open(filename, 'a')
+        channel.log_file.write('{}\t{}\t{}\n'.format(time_str, sender.nick, line))
+        channel.log_file.flush()
+
 
 def main():
     ap = ArgumentParser(description='wechatircd brings wx.qq.com to IRC clients')
@@ -1589,6 +1625,9 @@ def main():
                     help='IRC/HTTP/WebSocket listen addresses')
     ap.add_argument('--listen-ircd', nargs='*',
                     help='IRC listen addresses (overriding --listen value for IRC server)')
+    ap.add_argument('--logger-ignore', nargs='*', help='list of ignored regex, do not log contacts/chatrooms(generated from DisplayName) whose names match')
+    ap.add_argument('--logger-mask', help='WeeChat logger.mask.irc')
+    ap.add_argument('--logger-time-format', help='WeeChat logger.file.time_format')
     ap.add_argument('-p', '--port', type=int, default=6667,
                     help='IRC server listen port')
     ap.add_argument('-q', '--quiet', action='store_const', const=logging.WARN, dest='loglevel')

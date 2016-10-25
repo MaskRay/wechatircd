@@ -64,6 +64,9 @@ Nicks of contacts are generated from `RemarkName` or `DisplayName`.
 - `--http-root .`, the root directory to serve `app.js`.
 - `--tls-key`, TLS key for HTTPS/WebSocket.
 - `--tls-cert`, TLS certificate for HTTPS/WebSocket.
+- `--logger-ignore '&test0' '&test1'`, list of ignored regex, do not log contacts/groups whose names match
+- `--logger-mask '/tmp/wechat/$channel/%Y-%m-%d.log'`, server side log
+- `--logger-time-format %H:%M`, time format of server side log
 
 ## IRC features
 
