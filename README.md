@@ -95,6 +95,11 @@ Supported IRC commands:
 - `/topic topic`, change the topic of a group. Because IRC does not support renaming of a channel, you will leave the channel with the old name and join a channel with the new name.
 - `/who $channel`, see the member list.
 
+Multi-line messages:
+
+- `!m line0\nline1`
+- `!html line0<br>line1`
+
 ![](https://maskray.me/static/2016-02-21-wechatircd/topic-kick-invite.jpg)
 
 ### Display

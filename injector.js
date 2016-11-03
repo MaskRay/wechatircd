@@ -183,7 +183,12 @@ class CtrlServer {
           chatFactory.setCurrentUserName(data.receiver)
           this.localID = (utilFactory.now() + Math.random().toFixed(3)).replace(".", "")
           this.seenLocalID.add(this.localID)
-          editArea.editAreaCtn = data.message.replace('\n', '<br>').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          if (data.message.startsWith('!html '))
+            editArea.editAreaCtn = data.message.substr(6)
+          else if (data.message.startsWith('!m '))
+            editArea.editAreaCtn = data.message.substr(3).replace('\\n', '\n').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          else
+            editArea.editAreaCtn = data.message.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
           editArea.sendTextMessage()
         } catch (ex) {
           this.send({command: 'web_debug', message: 'send text message exception: '  + ex.message + "\nstack: " + ex.stack})
