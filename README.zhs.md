@@ -2,9 +2,12 @@
 
 wechatircd类似于bitlbee，在微信网页版和IRC间建起桥梁，可以使用IRC客户端收发微信朋友、群消息、设置群名、邀请删除成员等。
 
-## 原理
-
-访问微信网页版时用userscript `injector.user.js`加载`injector.js`，通过WebSocket与服务端通信。服务端兼做IRC服务器，从而可以让IRC客户端控制网页版。未实现IRC客户端，因此无法把微信群的消息转发到另一个IRC服务器(打通两个群的bot)。
+```
+           IRC               WebSocket                 HTTPS
+IRC client --- wechatircd.py --------- browser         ----- wx.qq.com
+                                       injector.user.js
+                                       injector.js
+```
 
 ## 安装
 
@@ -13,21 +16,32 @@ wechatircd类似于bitlbee，在微信网页版和IRC间建起桥梁，可以使
 
 ### Arch Linux
 
-安装<https://aur.archlinux.org/packages/wechatircd-git>，会自动在`/etc/wechatircd/`下生成自签名证书(见下文)，导入浏览器即可。
+- `yaourt -S wechatircd-git`。会在`/etc/wechatircd/`下生成自签名证书。
+- 把`/etc/wechatircd/cert.pem`导入到浏览器(见下文)
+- `systemctl start wechatircd`会运行`/usr/bin/wechatircd --http-cert /etc/wechatircd/cert.pem --http-key /etc/wechatircd/key.pem --http-root /usr/share/wechatircd`
+
+IRC服务器默认监听127.0.0.1:6667 (IRC)和127.0.0.1:9000 (HTTPS + WebSocket over TLS)。
+
+如果你在非本机运行，建议配置IRC over TLS，设置IRC connection password：`/usr/bin/wechatircd --http-cert /etc/wechatircd/cert.pem --http-key /etc/wechatircd/key.pem --http-root /usr/share/wechatircd --irc-cert /path/to/irc.key --irc-key /path/to/irc.cert --irc-password yourpassword`
+
+可以把HTTPS私钥证书用作IRC over TLS私钥证书。使用WeeChat的话，如果觉得让WeeChat信任证书比较麻烦(gnutls会检查hostname)，可以用：
+```
+set irc.server.wechat.ssl on`
+set irc.server.wechat.ssl_verify off
+set irc.server.wechat.password yourpassword`
+```
 
 ### 其他发行版
 
-- `openssl req -newkey rsa:2048 -nodes -keyout a.key -x509 -out a.crt -subj '/CN=127.0.0.1' -days 9999`创建密钥与证书。
-- 把证书导入浏览器，见下文
-- `./wechatircd.py --tls-cert a.crt --tls-key a.key`，会监听127.1:6667的IRC和127.1:9000的HTTPS与WebSocket over TLS
+- `openssl req -newkey rsa:2048 -nodes -keyout key.pem -x509 -out cert.pem -subj '/CN=127.0.0.1' -days 9999`创建密钥与证书。
+- 把`cert.pem`导入浏览器，见下文
+- `./wechatircd.py --http-cert cert.pem --http-key key.pem`
 
-默认监听`127.0.0.1`，如需监听其他地址，可以用选项`-l 127.1 192.168.0.2 192.168.1.2`。
-
-### 浏览器设置
+### 导入自签名证书到浏览器
 
 Chrome/Chromium
 
-- 访问`chrome://settings/certificates`，导入a.crt，在Authorities标签页选择该证书，Edit->Trust this certificate for identifying websites.
+- 访问`chrome://settings/certificates`，导入`cert.pem`，在Authorities标签页选择该证书，Edit->Trust this certificate for identifying websites.
 - 安装Tampermonkey扩展，点击<https://github.com/MaskRay/wechatircd/raw/master/injector.user.js>安装userscript，效果是在<https://wx.qq.com>页面注入<https://127.0.0.1:9000/injector.js>
 
 Firefox
@@ -39,16 +53,10 @@ Firefox
 
 HTTPS、WebSocket over TLS默认用9000端口，使用其他端口需要修改userscript，启动`wechatircd.py`时用`--web-port 10000`指定其他端口。
 
-### 无TLS(不推荐)
-
-如果嫌X.509太麻烦的话可以不用TLS，但浏览器可能会在console里给出警告甚至拒绝。
-
-- 执行`./wechatircd.py`，会监听127.1:6667的IRC和127.1:9000的HTTP与WebSocket，HTTP用于伺服项目根目录下的`injector.js`。
-- 安装userscript
-
 ## 使用
 
-- 登录<https://wx.qq.com>，会自动发起WebSocket连接。若打开多个，只有第一个生效
+- 运行`wechatircd.py`
+- 访问<https://wx.qq.com>，userscript注入的JavaScript会向服务器发起WebSocket连接
 - IRC客户端连接127.1:6667(weechat的话使用`/server add wechat 127.1/6667`)，会自动加入`+wechat` channel
 
 在`+telegram`发信并不会群发，只是为了方便查看有哪些朋友。
@@ -60,24 +68,61 @@ HTTPS、WebSocket over TLS默认用9000端口，使用其他端口需要修改us
 - `status [pattern]`，已获取的微信朋友、群列表，支持 pattern 参数用来筛选满足 pattern 的结果，目前仅支持子串查询。如要查询所有群，由于群由 `&` 开头，所以可以执行 `status &`。
 - `eval $password $expr`: 如果运行时带上了`--password $password`选项，这里可以eval，方便调试，比如`eval $password client.wechat_users`
 
+## 服务器选项
+
+- Join mode. There are three modes, the default is `--join auto`: join the channel upon receiving the first message. The other two are `--join all`: join all the channels; `--join manual`: no automatic join.
+- Groups that should not join automatically. This feature supplements join mode.
+  + `--ignore 'fo[o]' bar`, do not auto join chatrooms whose channel name(generated from DisplayName) matches regex `fo[o]` or `bar`
+  + `--ignore-display-name 'fo[o]' bar`, do not auto join chatrooms whose DisplayName matches regex `fo[o]` or `bar`
+- HTTP/WebSocket related options
+  + `--http-cert cert.pem`, TLS certificate for HTTPS/WebSocket. You may concatenate certificate+key, specify a single PEM file and omit `--http-key`. Use HTTP if neither --http-cert nor --http-key is specified.
+  + `--http-key key.pem`, TLS key for HTTPS/WebSocket.
+  + `--http-listen 127.1 ::1`, change HTTPS/WebSocket listen address to `127.1` and `::1`, overriding `--listen`.
+  + `--http-port 9000`, change HTTPS/WebSocket listen port to 9000.
+  + `--http-root .`, the root directory to serve `injector.js`.
+- `-l 127.0.0.1`, change IRC/HTTP/WebSocket listen address to `127.0.0.1`.
+- IRC related options
+  + `--irc-cert cert.pem`, TLS certificate for IRC over TLS. You may concatenate certificate+key, specify a single PEM file and omit `--irc-key`. Use plain IRC if neither --irc-cert nor --irc-key is specified.
+  + `--irc-key key.pem`, TLS key for IRC over TLS.
+  + `--irc-listen 127.1 ::1`, change IRC listen address to `127.1` and `::1`, overriding `--listen`.
+  + `--irc-password pass`, set the connection password to `pass`.
+  + `--irc-port 6667`, IRC server listen port.
+- Server side log
+  + `--logger-ignore '&test0' '&test1'`, list of ignored regex, do not log contacts/groups whose names match
+  + `--logger-mask '/tmp/wechat/$channel/%Y-%m-%d.log'`, format of log filenames
+  + `--logger-time-format %H:%M`, time format of server side log
+
 ## IRC命令
 
-wechatircd是个简单的IRC服务器，可以执行通常的IRC命令，可以对其他客户端私聊，创建standard channel(以`#`开头的channel)。另外若与微信网页版连接，就能看到微信联系人(朋友、群联系人)显示为特殊nick、微信群显示为特殊channel(以`&`开头，根据群名自动设置名称)
+- 标准IRC channel名以`#`开头
+- WeChat群名以`&`开头。`SpecialChannel#update`
+- 联系人带有mode `+v` (voice, 通常显示为前缀`+`)。`SpecialChannel#update_detail`
 
-这些特殊nick与channel只有当前客户端能看到，因此一个服务端支持多个微信帐号同时登录，每个用不同的IRC客户端控制。另外，以下命令会有特殊作用：
+`server-time` extension from IRC version 3.1, 3.2. `wechatircd.py` includes the timestamp (obtained from JavaScript) in messages to tell IRC clients that the message happened at the given time. See <http://ircv3.net/irc/>. See<http://ircv3.net/software/clients.html> for Client support of IRCv3.
 
-- 程序默认选项为`--join auto`，收到某个微信群的第一条消息后会自动加入对应的channel，即开始接收该微信群的消息。
-- `/dcc send nick/channel filename`，给微信朋友或微信群发图片/文件。参见<https://en.wikipedia.org/wiki/Direct_Client-to-Client#DCC_SEND>
-- `/invite nick [channel]`为邀请微信朋友加入群
-- `/join [channel]`表示开始接收该微信群的消息
-- `/kick nick`，删除群成员。因为网页版数据限制，无法立即获悉成员变动，channel里可能看不到改变，但实际已经生效了
-- `/list`，列出所有微信群
-- `/names`，更新当前群成员列表
-- `/part [channel]`的IRC原义为离开channel，转换为微信代表在当前IRC会话中不再接收该微信群的消息。不用担心，wechatircd并没有主动退出群的功能
-- `/query nick`打开与`$nick`的私聊窗口，与之私聊即为在微信上和他/她/它对话
-- `/summon nick message`，发送添加朋友请求，message为验证信息
-- `/topic topic`为重命名群，因为IRC不支持channel改名，实现方式为会自动退出原名称的channel并加入新名称的channel
-- `/who channel`，查看群成员列表
+Configuration for WeeChat:
+```
+/set irc.server_default.capabilities "account-notify,away-notify,cap-notify,multi-prefix,server-time,znc.in/server-time-iso,znc.in/self-message"
+```
+
+Supported IRC commands:
+
+- `/cap`, supported capabilities.
+- `/dcc send $nick/$channel $filename`, send image or file。This feature borrows the command `/dcc send` which is well supported in IRC clients. See <https://en.wikipedia.org/wiki/Direct_Client-to-Client#DCC_SEND>.
+- `/invite $nick [$channel]`, invite a contact to the group.
+- `/kick $nick`, delete a group member. You must be the group leader to do this. Due to the defect of the Web client, you may not receive notifcations about the change of members.
+- `/list`, list groups.
+- `/names`, update nicks in the channel.
+- `/part $channel`, no longer receive messages from the channel. It just borrows the command `/part` and it will not leave the group.
+- `/query $nick`, open a chat window with `$nick`.
+- `/summon $nick $message`，add a contact.
+- `/topic topic`, change the topic of a group. Because IRC does not support renaming of a channel, you will leave the channel with the old name and join a channel with the new name.
+- `/who $channel`, see the member list.
+
+Multi-line messages:
+
+- `!m line0\nline1`
+- `!html line0<br>line1`
 
 ![](https://maskray.me/static/2016-02-21-wechatircd/topic-kick-invite.jpg)
 
@@ -109,10 +154,6 @@ Emoji在网页上呈现时为`<img class="emoji emoji1f604" text="_web" src="
 获取所有联系人(朋友、订阅号、群)，`deliveredContact`记录投递到服务端的联系人，`deliveredContact`记录同处一群的非直接联系人。
 
 每隔一段时间把未投递过的联系人发送到服务端。
-
-### 收到微信服务器消息`messageProcess`
-
-原有代码会更新未读标记数及声音提醒，现在改为若成功发送到服务端则不再提醒，以免浏览器的这个标签页造成干扰。
 
 ## Python服务端代码
 

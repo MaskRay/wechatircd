@@ -186,7 +186,7 @@ class CtrlServer {
           if (data.message.startsWith('!html '))
             editArea.editAreaCtn = data.message.substr(6)
           else if (data.message.startsWith('!m '))
-            editArea.editAreaCtn = data.message.substr(3).replace('\\n', '\n').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            editArea.editAreaCtn = data.message.substr(3).replace(/\\n/g, '\n').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
           else
             editArea.editAreaCtn = data.message.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
           editArea.sendTextMessage()
