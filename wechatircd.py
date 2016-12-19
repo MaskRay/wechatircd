@@ -933,7 +933,7 @@ class SpecialChannel(Channel):
             for member in record['MemberList']:
                 user = self.client.ensure_special_user(member)
                 if user is not self.client:
-                    if owner_uin == user.uin:
+                    if owner_uin > 0 and owner_uin == user.uin:
                         seen[user] = 'o'
                     elif user.is_friend:
                         seen[user] = 'v'

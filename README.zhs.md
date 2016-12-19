@@ -59,7 +59,7 @@ HTTPS、WebSocket over TLS默认用9000端口，使用其他端口需要修改us
 - 访问<https://wx.qq.com>，userscript注入的JavaScript会向服务器发起WebSocket连接
 - IRC客户端连接127.1:6667(weechat的话使用`/server add wechat 127.1/6667`)，会自动加入`+wechat` channel
 
-在`+telegram`发信并不会群发，只是为了方便查看有哪些朋友。
+在`+wechat`发信并不会群发，只是为了方便查看有哪些朋友。
 微信朋友的nick优先选取备注名(`RemarkName`)，其次为`DisplayName`(原始JS根据昵称等自动填写的一个名字)
 
 在`+wechat` channel可以执行一些命令：
@@ -166,10 +166,10 @@ Emoji在网页上呈现时为`<img class="emoji emoji1f604" text="_web" src="
 ├── Channel
 │   ├── StandardChannel      `#`开头的IRC channel
 │   ├── StatusChannel        `+wechat`，查看控制当前微信会话
-│   └── WeChatRoom           微信群对应的channel，仅该客户端可见
+│   └── SpecialChannel       微信群对应的channel，仅该客户端可见
 ├── (User)
 │   ├── Client               IRC客户端连接
-│   ├── WeChatUser           微信用户对应的user，仅该客户端可见
+│   ├── SpecialUser          微信用户对应的user，仅该客户端可见
 ├── (IRCCommands)
 │   ├── UnregisteredCommands 注册前可用命令：NICK USER QUIT
 │   ├── RegisteredCommands   注册后可用命令
@@ -193,30 +193,6 @@ WeeChat配置如下：
 ### 用途
 
 可以使用强大的IRC客户端，方便记录日志(微信日志导出太麻烦<https://maskray.me/blog/2014-10-14-wechat-export>)，可以写bot。
-
-## 我的配置
-
-<https://wiki.archlinux.org/index.php/Systemd/User>
-
-`~/.config/systemd/user/wechatircd.service`:
-```
-[Unit]
-Description=wechatircd
-Documentation=https://github.com/MaskRay/wechatircd
-After=network.target
-
-[Service]
-WorkingDirectory=%h/projects/wechatircd
-ExecStart=/home/ray/projects/wechatircd/wechatircd.py --tls-key a.key --tls-cert a.crt --password a --ignore 不想自动加入的群名0 不想自动加入的群名1
-
-[Install]
-WantedBy=graphical.target
-```
-
-WeeChat:
-```
-/server add wechat 127.1/6667 -autoconnect
-```
 
 ## 微信数据获取及控制
 
