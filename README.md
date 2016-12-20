@@ -1,3 +1,5 @@
+[简体中文](README.zhs.md)
+
 # wechatircd
 
 wechatircd injects JavaScript (`injector.js`) to wx.qq.com, which uses WebSocket to communicate with an IRC server (`wechatircd.py`), thus enable IRC clients connected to the server to send and receive messages from WeChat.
@@ -71,7 +73,7 @@ Nicks of contacts are generated from `RemarkName` or `DisplayName`.
 
 ## Server options
 
-- Join mode. There are three modes, the default is `--join auto`: join the channel upon receiving the first message. The other two are `--join all`: join all the channels; `--join manual`: no automatic join.
+- Join mode. There are three modes, the default is `--join auto`: join the channel upon receiving the first message, no rejoin after issuing `/part` and receiving messages later. The other three are `--join all`: join all the channels; `--join manual`: no automatic join; `--join new`: like `auto`, but rejoin when new messages arrive even if after `/part`.
 - Groups that should not join automatically. This feature supplements join mode.
   + `--ignore 'fo[o]' bar`, do not auto join chatrooms whose channel name(generated from DisplayName) matches regex `fo[o]` or `bar`
   + `--ignore-display-name 'fo[o]' bar`, do not auto join chatrooms whose DisplayName matches regex `fo[o]` or `bar`
@@ -113,6 +115,7 @@ Supported IRC commands:
 - `/invite $nick [$channel]`, invite a contact to the group.
 - `/kick $nick`, delete a group member. You must be the group leader to do this. Due to the defect of the Web client, you may not receive notifcations about the change of members.
 - `/list`, list groups.
+- `/mode +m`, no rejoin in `--join new` mode. `/mode -m` to revert.
 - `/names`, update nicks in the channel.
 - `/part $channel`, no longer receive messages from the channel. It just borrows the command `/part` and it will not leave the group.
 - `/query $nick`, open a chat window with `$nick`.

@@ -360,7 +360,7 @@ class RegisteredCommands:
                 client2 = client.server.get_nick(target)
                 client.rpl_umodeis(client2.mode)
         elif client.has_special_room(target):
-            client.get_special_room(target).on_mode(client)
+            client.get_special_room(target).on_mode(client, *args)
         elif client.server.has_channel(target):
             client.server.get_channel(target).on_mode(client)
         else:
@@ -967,6 +967,21 @@ class SpecialChannel(Channel):
             return (source.client,)
         return (source,)
 
+    def on_mode(self, client, *args):
+        if len(args):
+            if args[0] == '+m':
+                self.mode = 'm'+self.mode.replace('m', '')
+                self.event(client, 'MODE', '{} {}', self.name, args[0])
+            elif args[0] == '-m':
+                self.mode = self.mode.replace('m', '')
+                self.event(client, 'MODE', '{} {}', self.name, args[0])
+            elif re.match('[-+]', args[0]):
+                client.err_unknownmode(args[0][1] if len(args[0]) > 1 else '')
+            else:
+                client.err_unknownmode(args[0][0] if len(args[0]) else '')
+        else:
+            client.rpl_channelmodeis(self.name, self.mode)
+
     def on_notice_or_privmsg(self, client, command, msg):
         if not client.ctcp(self.username, command, msg):
             client.server.irc_log(self, datetime.now(), client, msg)
@@ -1037,10 +1052,11 @@ class SpecialChannel(Channel):
 
     def on_websocket_message(self, data):
         msg = data['message']
-        if self.idle:
-            self.idle = False
-            if self.client.options.join == 'auto' and not self.joined:
+        if not self.joined and 'm' not in self.mode:
+            if self.client.options.join == 'auto' and self.idle or \
+                    self.client.options.join == 'new':
                 self.client.auto_join(self)
+        self.idle = False
         if not self.joined:
             return
         sender = self.client.ensure_special_user(data['sender'])
@@ -1248,6 +1264,9 @@ class Client:
 
     def err_passwdmismatch(self, command):
         self.reply('464 * {} :Password incorrect', command)
+
+    def err_unknownmode(self, mode):
+        self.reply("472 {} {} :is unknown mode char to me", self.nick, mode)
 
     def err_nochanmodes(self, channelname):
         self.reply("477 {} {} :Channel doesn't support modes", self.nick, channelname)
@@ -1652,8 +1671,8 @@ def main():
     ap.add_argument('--irc-password', default='', help='Set the IRC connection password')
     ap.add_argument('--irc-port', type=int, default=6667,
                     help='IRC server listen port. defalt: 6667')
-    ap.add_argument('-j', '--join', choices=['all', 'auto', 'manual'], default='auto',
-                    help='join mode for '+im_name+' chatrooms. all: join all after connected; auto: join after the first message arrives; manual: no automatic join. default: auto')
+    ap.add_argument('-j', '--join', choices=['all', 'auto', 'manual', 'new'], default='auto',
+                    help='join mode for '+im_name+' chatrooms. all: join all after connected; auto: join after the first message arrives; manual: no automatic join; new: join whenever messages arrive (even if after /part); default: auto')
     ap.add_argument('-l', '--listen', nargs='*', default=['127.0.0.1'],
                     help='IRC/HTTP/WebSocket listen addresses, default: 127.0.0.1')
     ap.add_argument('--logger-ignore', nargs='*', help='list of ignored regex, do not log contacts/chatrooms whose names match')
