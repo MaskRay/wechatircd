@@ -188,11 +188,11 @@ class Web(object):
                 pass
             break
 
-    def reload_friend(self, who):
+    def reload_contact(self, who):
         for ws in self.ws:
             try:
                 ws.send_str(json.dumps({
-                    'command': 'reload_friend',
+                    'command': 'reload_contact',
                     'name': who,
                 }))
             except:
@@ -513,20 +513,21 @@ class SpecialCommands:
         client.status('Friend request to {} failed'.format(nick))
 
     @staticmethod
-    def friend(client, data):
+    def contact(client, data):
+        friend = data['friend']
         record = data['record']
-        debug('friend: ' + ', '.join([k + ':' + repr(record.get(k)) for k in ['DisplayName', 'NickName', 'UserName']]))
-        client.ensure_special_user(record, 1)
+        debug('{}: '.format('friend' if friend else 'room_contact') + ', '.join([k + ':' + repr(record.get(k)) for k in ['DisplayName', 'NickName', 'UserName']]))
+        client.ensure_special_user(record, 1 if friend else -1)
+
+    @staticmethod
+    def delete_contact(client, data):
+        username = data['username']
+        if username in client.username2special_room:
+            client.username2special_room[username].on_delete()
 
     @staticmethod
     def message(client, data):
         client.ensure_special_user(data['receiver']).on_websocket_message(data)
-
-    @staticmethod
-    def room_contact(client, data):
-        record = data['record']
-        debug('room_contact: ' + ', '.join([k + ':' + repr(record.get(k)) for k in ['DisplayName', 'NickName', 'UserName']]))
-        client.ensure_special_user(data['record'], -1)
 
     @staticmethod
     def room(client, data):
@@ -540,7 +541,7 @@ class SpecialCommands:
 
     @staticmethod
     def self(client, data):
-        client.username = data['UserName']
+        client.username = data['username']
 
     @staticmethod
     def send_file_message_nak(client, data):
@@ -778,8 +779,8 @@ class StatusChannel(Channel):
             self.respond(client, '    eval python expression')
             self.respond(client, 'status [pattern]')
             self.respond(client, '    show status for user, channel and wechat rooms')
-            self.respond(client, 'reload_friend $name')
-            self.respond(client, '    reload friend info in case of no such nick/channel in privmsg, and use __all__ as name if you want to reload all')
+            self.respond(client, 'reload_contact $name')
+            self.respond(client, '    reload contact info in case of no such nick/channel in privmsg, and use __all__ as name if you want to reload all')
         elif msg.startswith('status'):
             pattern = None
             ary = msg.split(' ', 1)
@@ -803,15 +804,15 @@ class StatusChannel(Channel):
                 if pattern is not None and pattern not in name: continue
                 if isinstance(room, SpecialChannel):
                     self.respond(client, '    ' + name)
-        elif msg.startswith('reload_friend'):
+        elif msg.startswith('reload_contact'):
             who = None
             ary = msg.split(' ', 1)
             if len(ary) > 1:
                 who = ary[1]
             if not who:
-                self.respond(client, 'reload_friend <name>')
+                self.respond(client, 'reload_contact <name>')
             else:
-                Web.instance.reload_friend(who)
+                Web.instance.reload_contact(who)
         elif msg.startswith('web_eval'):
             expr = None
             ary = msg.split(' ', 1)
@@ -914,7 +915,7 @@ class SpecialChannel(Channel):
         suffix = ''
         while 1:
             name = base+suffix
-            if name == old_name or not client.server.has_channel(base+suffix):
+            if name == old_name or not client.has_special_room(name):
                 break
             suffix = str(int(suffix or 0)+1)
         if name != old_name:
@@ -966,6 +967,16 @@ class SpecialChannel(Channel):
         if isinstance(source, (SpecialUser, SpecialChannel)):
             return (source.client,)
         return (source,)
+
+    def on_delete(self):
+        if self.joined:
+            self.on_part(self.client, 'Deleted')
+        for member in self.members:
+            if member != self.client:
+                member.leave(self)
+        self.members.clear()
+        del self.client.username2special_room[self.username]
+        del self.client.name2special_room[irc_lower(self.name)]
 
     def on_mode(self, client, *args):
         if len(args):
@@ -1459,7 +1470,6 @@ class SpecialUser:
         return '{}!{}@{}'.format(self.nick, self.username.replace('@', ''), im_name)
 
     def name(self):
-        # items in MemberList do not have 'DisplayName' or 'RemarkName'
         if self.username.startswith('@'):
             base = re.sub('^[&#!+]*', '', irc_escape(self.record.get('DisplayName', '')))
         # special contacts, e.g. filehelper
@@ -1468,11 +1478,10 @@ class SpecialUser:
         return base or 'Guest'
 
     def update(self, client, record, friend):
-        if not self.record or 'RemarkName' in record:
-            self.record.update(record)
-            uin = self.record.get('Uin', 0)
-            if uin > 0:
-                self.uin = uin
+        self.record.update(record)
+        uin = self.record.get('Uin', 0)
+        if uin > 0:
+            self.uin = uin
         old_nick = getattr(self, 'nick', None)
         base = self.name()
         suffix = ''
@@ -1521,7 +1530,7 @@ class SpecialUser:
     def on_who_member(self, client, channelname):
         client.reply('352 {} {} {} {} {} {} H :0 {}', client.nick, channelname,
                      self.username, im_name, client.server.name,
-                     self.nick, self.username)
+                     self.nick, self.record.get('NickName', ''))
 
     def on_whois(self, client):
         client.reply('311 {} {} {} {} * :{}', client.nick, self.nick,

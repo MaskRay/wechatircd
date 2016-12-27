@@ -11,59 +11,26 @@ const console2 = {
 }
 
 class CtrlServer {
-  init() {
-    this.localID = null // 服务端通过WebSocket控制网页版发送消息时指定LocalID，区分网页版上发送的消息(需要投递到服务端)与服务端发送的消息(不需要投递)
-    this.seenLocalID = new Set() // 记录服务端请求发送的消息的LocalID，避免服务端收到自己发送的消息
-    this.deliveredContact = new Map()
-    this.deliveredRoomContact = new Map()
-    this.badContact = new Map()
-
-    let eventTarget = document.createElement('div')
-
+  constructor() {
+    const eventTarget = document.createElement('div')
     eventTarget.addEventListener('open', data => this.reset())
     eventTarget.addEventListener('message', data => this.onmessage && this.onmessage(data))
     this.dispatch = eventTarget.dispatchEvent.bind(eventTarget)
-
     this.ws = null
     this.forcedClose = false
-
     this.open(false)
     setInterval(() => this.sync_contacts(), 5000)
-  }
 
-  open(reconnect) {
-    this.ws = new WebSocket(Common.WEBSOCKET_URL)
-
-    function newEvent(s, data) {
-      let e = document.createEvent('CustomEvent')
-      e.initCustomEvent(s, false, false, data)
-      return e
-    }
-
-    this.ws.onopen = event => {
-      this.dispatch(newEvent('open', event.data))
-    }
-    this.ws.onmessage = event => {
-      this.dispatch(newEvent('message', event.data))
-    }
-    this.ws.onclose = event => {
-      this.reset()
-      if (this.forcedClose)
-        this.dispatch(newEvent('close', event.data))
-      else
-        setTimeout(() => this.open(true), 1000)
-    }
+    this.localID = null // 服务端通过WebSocket控制网页版发送消息时指定LocalID，区分网页版上发送的消息(需要投递到服务端)与服务端发送的消息(不需要投递)
+    this.seenLocalID = new Set() // 记录服务端请求发送的消息的LocalID，避免服务端收到自己发送的消息
+    this.contacts = new Map
+    this.reset()
   }
 
   close() {
     this.forcedClose = true
     if (this.ws)
       this.ws.close()
-  }
-
-  send(data) {
-    if (this.ws)
-      this.ws.send(JSON.stringify(data));
   }
 
   onmessage(data) {
@@ -179,7 +146,6 @@ class CtrlServer {
       case 'send_text_message':
         let old = chatFactory.getCurrentUserName()
         try {
-          console2.log("send_text_message", old, data.receiver);
           chatFactory.setCurrentUserName(data.receiver)
           this.localID = (utilFactory.now() + Math.random().toFixed(3)).replace(".", "")
           this.seenLocalID.add(this.localID)
@@ -210,22 +176,16 @@ class CtrlServer {
       case 'mod_topic':
         chatroomFactory.modTopic(data.room, data.topic)
         break
-      case 'reload_friend':
-        if (data.name == '__all__') {
-          this.deliveredContact.clear();
-        } else if (data.name) {
-          let contacts = contactFactory.getAllContacts();
-          for (let un in contacts) {
-            user = contacts[un];
-            if (!user) {
-              continue;
-            }
-            if (user.RemarkName == data.name || user.getDisplayName() == data.name) {
-              this.deliveredContact.delete(un);
+      case 'reload_contact':
+        if (data.name === '__all__')
+          this.pending_contacts = new Set(this.contacts.keys())
+        else if (data.name)
+          for (let [username, user] of Object.entries(contactFactory.getAllContacts())) {
+            if (user.RemarkName === data.name || user.getDisplayName() === data.name) {
+              this.pending_contacts.add(username)
               this.send({command: 'web_debug', reloaded_contact: user})
             }
           }
-        }
         break
       }
     } catch (ex) {
@@ -234,114 +194,110 @@ class CtrlServer {
     }
   }
 
-  sync_contacts() {
-    if (! window.contactFactory) return
-    try {
-      let contacts = contactFactory.getAllContacts(),
-        all = Object.assign({}, window._strangerContacts, contacts),
-        me = accountFactory.getUserName(), me_sent = false;
-      for (let username in all) {
-        let x = all[username], xx = Object.assign({}, x), update = false, command
-        if (! x) {
-          if (!this.badContact.has(username)) {
-            this.send({command: 'web_debug', message: 'undefined user: ' + username});
-          }
-          this.badContact.set(username, x);
-          continue
-        }
-        xx.DisplayName = x.RemarkName
-        if (! xx.DisplayName) {
-          if (typeof x.getDisplayName != 'function') {
-            continue;
-          } else {
-            xx.DisplayName = x.getDisplayName();
-          }
-        }
-        if (! xx.DisplayName) {
-          if (!this.badContact.has(username)) {
-            this.send({command: 'web_debug', message: 'unnamed user: ' + username})
-          }
-          this.badContact.set(username, x);
-          continue
-        }
-        if (x.isBrandContact() || x.isShieldUser())
-          ;
-        else if (! this.deliveredContact.has(username))
-          update = true
-        else {
-          let yy = this.deliveredContact.get(username)
-          if (xx.DisplayName != yy.DisplayName || x.isRoomContact() && x.MemberCount != yy.DeliveredMemberCount) {
-            update = true;
-          } else if (yy.SentContactType != 'friend' && x.isContact() && !x.isRoomContact()) {
-            if (username[1] != '@') {     // prevent
-              this.send({command: 'web_debug', message: 'contact changed from ' + yy.SentContactType + ' to friend: ' + xx.DisplayName, user: xx});
-            } else {
-              this.send({command: 'web_debug', message: 'contact changed from ' + yy.SentContactType + ' to friend: ' + xx.DisplayName, username: username});
-            }
-            update = true;
-          }
-        }
-        if (update) {
-          if (! me_sent) {
-            this.send({command: 'self', UserName: me})
-            me_sent = true
-          }
-          if (x.isRoomContact()) {
-            let members = []
-            command = 'room'
-            let contact_send = 0
-            for (let member of x.MemberList) {
-              let u = member.UserName, y = all[u], yy, set
-              if (! y) {
-                if (!this.badContact.has(u)) {
-                  this.send({command: 'web_debug', message: 'undefined room contact:' + u});
-                }
-                this.badContact.set(u, y);
-                continue // not loaded
-              }
-              yy = Object.assign({}, y)
-              yy.DisplayName = y.RemarkName || y.getDisplayName() || member.NickName
-              members.push(yy)
-              if (! (u in all) && (! ((set = this.deliveredRoomContact.get(u)) instanceof Set) || ! set.has(u))) {
-                if (! set)
-                  set = new Set
-                this.send({command: y.isContact() ? 'friend' : 'room_contact', record: yy})
-                set.add(u)
-                this.deliveredRoomContact.set(u, set)
-                contact_send += 1
-              }
-            }
-            let yy = this.deliveredContact.get(username)
-            if (contact_send == 0 && yy && yy.DeliveredMemberCount === members.length) {
-              update = false;
-            } else {
-              xx.MemberList = members
-              xx.DeliveredMemberCount = members.length
-              xx.SentContactType = 'room';
-            }
-          } else if (x.isContact() || username == 'filehelper') {
-            command = 'friend'
-            xx.SentContactType = command
-          } else {
-            command = 'room_contact';
-            xx.SentContactType = command
-          }
-          if (update) {
-            this.send({command: command, record: xx})
-            this.deliveredContact.set(username, xx)
-          }
-        }
-      }
-    } catch (ex) {
-      console.error(ex.stack)
-      this.send({command: 'web_debug', message: 'sync contact exception: ' + ex.message + "\nstack: " + ex.stack})
+  open(reconnect) {
+    this.ws = new WebSocket(Common.WEBSOCKET_URL)
+
+    function newEvent(s, data) {
+      let e = document.createEvent('CustomEvent')
+      e.initCustomEvent(s, false, false, data)
+      return e
+    }
+
+    this.ws.onopen = event => {
+      this.dispatch(newEvent('open', event.data))
+    }
+    this.ws.onmessage = event => {
+      this.dispatch(newEvent('message', event.data))
+    }
+    this.ws.onclose = event => {
+      this.reset()
+      if (this.forcedClose)
+        this.dispatch(newEvent('close', event.data))
+      else
+        setTimeout(() => this.open(true), 1000)
     }
   }
 
   reset() {
     this.seenLocalID.clear()
-    this.deliveredContact.clear()
-    this.deliveredRoomContact.clear()
+    this.pending_self = true
+    this.pending_contacts = new Set(this.contacts.keys())
+  }
+
+  send(data) {
+    if (this.ws)
+      this.ws.send(JSON.stringify(data));
+  }
+
+  sync_contacts() {
+    if (! (window.contactFactory && this.ws && this.ws.readyState === WebSocket.OPEN)) return
+    try {
+      if (this.pending_self) {
+        const self = accountFactory.getUserName()
+        if (self) {
+          this.send({
+            command: 'self',
+            username: self,
+          })
+          this.pending_self = false
+        }
+      }
+      // TODO potential race when 'self' is not acknowledged
+      if (this.pending_contacts.size) {
+        for (let username of this.pending_contacts)
+          if (this.contacts.has(username)) {
+            const x = this.contacts.get(username)
+            let y = {
+              DisplayName: x.RemarkName || x.DisplayName || x.NickName,
+              NickName: x.NickName,
+              OwnerUin: x.OwnerUin,
+              UserName: x.UserName,
+            }
+            if (x.VerifyFlag & confFactory.MM_USERATTRVERIFYFALG_BIZ_BRAND // isBrandContact()
+              || utilFactory.isShieldUser(username))
+              ;
+            else if (utilFactory.isRoomContact(username)) { // isRoomContact
+              if (x.MemberList) {
+                let members = []
+                for (let xx of x.MemberList) {
+                  const z = this.contacts.get(xx.UserName) || {}
+                  const yy = {
+                    DisplayName: z.RemarkName || z.DisplayName || z.NickName || xx.RemarkName || xx.DisplayName || xx.NickName,
+                    NickName: z.NickName || xx.NickName,
+                    Uin: z.Uin || xx.Uin,
+                    UserName: z.UserName || xx.UserName,
+                  }
+                  members.push(yy)
+                  //if (xx.UserName.match(/^@d2b7/))
+                  //  debugger
+                  // prevent a RoomContact from changing his name if he is a member of several groups
+                  if (! this.contacts.has(xx.UserName))
+                    this.contacts.set(xx.UserName, yy)
+                }
+                y.MemberList = members
+              }
+              this.send({
+                command: 'room',
+                record: y,
+              })
+            } else {
+              this.send({
+                command: 'contact',
+                friend: x.ContactFlag & confFactory.CONTACTFLAG_CONTACT,
+                record: y,
+              })
+            }
+          } else
+            this.send({
+              command: 'delete_contact',
+              username
+            })
+        this.pending_contacts.clear()
+      }
+    } catch (ex) {
+      console2.error(ex.stack)
+      this.send({command: 'web_debug', message: 'sync contact exception: ' + ex.message + "\nstack: " + ex.stack})
+    }
   }
 }
 
@@ -357,8 +313,7 @@ class Injector {
     if (Common.DEBUG)
       Injector.lock(window, 'console', window.console)
     this.initAngularInjection()
-    window.ctrlServer = this.ctrlServer = new CtrlServer()
-    window.onload = () => this.ctrlServer.init()
+    window.ctrlServer = new CtrlServer()
   }
 
   initAngularInjection() {
@@ -393,7 +348,7 @@ class Injector {
         window.editArea = angular.element('#editArea').scope()
 
         // chatFactory#createMessage
-        let chatFactoryCreateMessageReal = chatFactory.createMessage
+        const chatFactoryCreateMessageReal = chatFactory.createMessage
         Object.defineProperty(chatFactory, 'createMessage', {
           set: () => {},
           get: () => function (e) {
@@ -402,11 +357,29 @@ class Injector {
         })
 
         // chatFactory#messageProcess
-        let chatFactoryMessageProcessReal = chatFactory.messageProcess
+        const chatFactoryMessageProcessReal = chatFactory.messageProcess
         Object.defineProperty(chatFactory, 'messageProcess', {
           set: () => {},
           get: () => function(e) {
             return Injector.chatFactoryMessageProcess.call(chatFactory, chatFactoryMessageProcessReal).apply(null, arguments)
+          }
+        })
+
+        // contactFactory#addContact
+        const contactFactoryAddContactReal = contactFactory.addContact
+        Object.defineProperty(contactFactory, 'addContact', {
+          set: () => {},
+          get: () => function(e) {
+            return Injector.contactFactoryAddContact.call(contactFactory, contactFactoryAddContactReal).apply(null, arguments)
+          }
+        })
+
+        // contactFactory#deleteContact
+        const contactFactoryDeleteContactReal = contactFactory.deleteContact
+        Object.defineProperty(contactFactory, 'deleteContact', {
+          set: () => {},
+          get: () => function(e) {
+            return Injector.contactFactoryDeleteContact.call(contactFactory, contactFactoryDeleteContactReal).apply(null, arguments)
           }
         })
 
@@ -626,7 +599,7 @@ class Injector {
               }
           } catch (ex) {
               window.ctrlServer.send({command: 'web_debug', message: 'message exception: '  + ex.message + "\nstack: " + ex.stack})
-              console.error(ex.stack)
+              console2.error(ex.stack)
           }
 
           if (e.MMUnread) {
@@ -635,6 +608,27 @@ class Injector {
               accountFactory.isSoundOpen() && utilFactory.initMsgNoticePlayer(confFactory.RES_SOUND_RECEIVE_MSG)
           }
       }
+    }
+  }
+
+  static contactFactoryAddContact(real) {
+    return (e) => {
+      const ret = real.call(this, e)
+      // this rule filters those `isShieldUser` groups and strangers
+      // friends may exist both in window._contacts and window.strangerContacts, and they may be added twice, one with ContactFlag unset and the other with ContactFlag set
+      if (e.ContactFlag & confFactory.CONTACTFLAG_CONTACT || ! (e.UserName in _strangerContacts)) {
+        ctrlServer.contacts.set(e.UserName, e)
+        ctrlServer.pending_contacts.add(e.UserName)
+      }
+      return ret
+    }
+  }
+
+  static contactFactoryDeleteContact(real) {
+    return (e) => {
+      ctrlServer.contacts.delete(e.UserName)
+      ctrlServer.pending_contacts.add(e.UserName)
+      return real.call(this, e)
     }
   }
 }
