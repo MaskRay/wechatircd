@@ -5,6 +5,9 @@
 // @description  inject client side JS of wechatircd to https://wx.qq.com
 // @author       MaskRay
 // @match        https://wx.qq.com/*
+// @match        https://wx2.qq.com/*
+// @match        https://web.wechat.com/*
+// @match        https://web2.wechat.com/*
 // @run-at       document-start
 // @downloadURL  https://github.com/MaskRay/wechatircd/raw/master/injector.user.js
 // @updateURL    https://github.com/MaskRay/wechatircd/raw/master/injector.user.js
