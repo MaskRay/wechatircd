@@ -2,7 +2,7 @@
 
 # wechatircd
 
-wechatircd injects JavaScript (`injector.js`) to wx.qq.com, which uses WebSocket to communicate with an IRC server (`wechatircd.py`), thus enable IRC clients connected to the server to send and receive messages from WeChat.
+wechatircd injects JavaScript (`injector.js`) to wx.qq.com, which uses WebSocket to communicate with an IRC server (`wechatircd.py`), thus enable IRC clients connected to the server to send and receive messages from WeChat, set topics, invite/delete members, ...
 
 ```
            IRC               WebSocket                 HTTPS
@@ -11,38 +11,34 @@ IRC client --- wechatircd.py --------- browser         ----- wx.qq.com
                                        injector.js
 ```
 
+Discuss wechatircd by joinging #wechatircd on freenode, or the [user group on Telegram](https://t.me/wechatircd).
+
 ## Installation
-
-`>=python-3.5`
-
-`pip install -r requirements.txt`
 
 ### Arch Linux
 
 - `yaourt -S wechatircd-git`. It will generate a self-signed key/certificate pair in `/etc/wechatircd/` (see below).
 - Import `/etc/wechatircd/cert.pem` to the browser (see below).
-- `systemctl start wechatircd`, which runs `/usr/bin/wechatircd --http-cert /etc/wechatircd/cert.pem --http-key /etc/wechatircd/key.pem --http-root /usr/share/wechatircd`.
+- `systemctl start wechatircd`, which runs `/usr/bin/wechatircd --http-cert /etc/wechatircd/cert.pem --http-key /etc/wechatircd/key.pem --http-root /usr/share/wechatircd`. You may want to customize `/etc/systemd/system/wechatircd.service`.
 
-The IRC server listens on 127.0.0.1:6667 (IRC) and 127.0.0.1:9000 (HTTPS + WebSocket over TLS) by default.
+`wechatircd.py` (the server) will listen on 127.0.0.1:6667 (IRC) and 127.0.0.1:9000 (HTTPS + WebSocket over TLS).
 
-If you run the server on another machine, it is recommended to set up IRC over TLS and an IRC connection password: `/usr/bin/wechatircd --http-cert /etc/wechatircd/cert.pem --http-key /etc/wechatircd/key.pem --http-root /usr/share/wechatircd --irc-cert /path/to/irc.key --irc-key /path/to/irc.cert --irc-password yourpassword`.
-
-You can reuse the HTTPS certificate+key as IRC over TLS certificate+key. If you use WeeChat and find it difficult to set up a valid certificate (gnutls checks the hostname), type the following lines in WeeChat:
+If you run the server on another machine, it is recommended to set up IRC over TLS and an IRC connection password with a few more options: `--irc-cert /path/to/irc.key --irc-key /path/to/irc.cert --irc-password yourpassword`. You can reuse the HTTPS certificate+key. If you use WeeChat and find it difficult to set up a valid certificate (gnutls checks the hostname), type the following lines in WeeChat:
 ```
-set irc.server.wechat.ssl on`
+set irc.server.wechat.ssl on
 set irc.server.wechat.ssl_verify off
-set irc.server.wechat.password yourpassword`
+set irc.server.wechat.password yourpassword
 ```
-
-`aur/python-aiohttp-1.0.5-1` may not work, please install `archlinuxcn/python-aiohttp-1.1.5-1` or newer.
 
 ### Not Arch Linux
 
+- python >= 3.5
+- `pip install -r requirements.txt`
 - Generate a self-signed private key/certificate pair with `openssl req -newkey rsa:2048 -nodes -keyout key.pem -x509 -out cert.pem -subj '/CN=127.0.0.1' -dates 9999`.
 - Import `cert.pem` to the browser.
 - `./wechatircd.py --http-cert cert.pem --http-key key.pem`
 
-### Import self-signed certificate to the browser
+### Userscript and self-signed certificate
 
 Chrome/Chromium
 
@@ -51,55 +47,41 @@ Chrome/Chromium
 
 Firefox
 
-- Install extension Greasemonkey，install the user script.
+- Install extension Greasemonkey，install the userscript.
 - Visit <https://127.0.0.1:9000/injector.js>, Firefox will show "Your connection is not secure", Advanced->Add Exception->Confirm Security Exception
 
-![](https://maskray.me/static/2016-02-21-wechatircd/run.jpg)
+![](https://maskray.me/static/2016-02-21-wechatircd/meow.jpg)
 
-The server listens on 127.0.0.1:9000 (HTTPS + WebSocket over TLS) by default, which can be overrided with the `--web-port 10000` option. You need to change the userscript to use other ports.
+The server serves `injector.js` and WebSocket connections on 127.0.0.1:9000 by default, which can be overriden with the `--http-port 9000` option. You need to change the userscript to use an alternative port.
 
 ## Usage
 
-- Run `wechatircd.py` to start the IRC + HTTPS + WebSocket server.
+- Run `wechatircd.py`
 - Visit <https://wx.qq.com>, the injected JavaScript will create a WebSocket connection to the server
 - Connect to 127.0.0.1:6667 in your IRC client
 
 You will join `+wechat` channel automatically and find your contact list there. Some commands are available:
 
 - `help`
-- `status`, mutual contact list、group/supergroup list
+- `eval`, eval a Python expression, such as: `eval server.nick2special_user` `eval server.name2special_room`
+- `status`, show contacts/channels
+- `reload_contact __all__`, reload all contact info in case of `no such nick/channel` in privmsg
 
-Nicks of contacts are generated from `RemarkName` or `DisplayName`.
-
-## Server options
-
-- Join mode. There are three modes, the default is `--join auto`: join the channel upon receiving the first message, no rejoin after issuing `/part` and receiving messages later. The other three are `--join all`: join all the channels; `--join manual`: no automatic join; `--join new`: like `auto`, but rejoin when new messages arrive even if after `/part`.
-- Groups that should not join automatically. This feature supplements join mode.
-  + `--ignore 'fo[o]' bar`, do not auto join chatrooms whose channel name(generated from DisplayName) matches regex `fo[o]` or `bar`
-  + `--ignore-display-name 'fo[o]' bar`, do not auto join chatrooms whose DisplayName matches regex `fo[o]` or `bar`
-- HTTP/WebSocket related options
-  + `--http-cert cert.pem`, TLS certificate for HTTPS/WebSocket. You may concatenate certificate+key, specify a single PEM file and omit `--http-key`. Use HTTP if neither --http-cert nor --http-key is specified.
-  + `--http-key key.pem`, TLS key for HTTPS/WebSocket.
-  + `--http-listen 127.1 ::1`, change HTTPS/WebSocket listen address to `127.1` and `::1`, overriding `--listen`.
-  + `--http-port 9000`, change HTTPS/WebSocket listen port to 9000.
-  + `--http-root .`, the root directory to serve `injector.js`.
-- `-l 127.0.0.1`, change IRC/HTTP/WebSocket listen address to `127.0.0.1`.
-- IRC related options
-  + `--irc-cert cert.pem`, TLS certificate for IRC over TLS. You may concatenate certificate+key, specify a single PEM file and omit `--irc-key`. Use plain IRC if neither --irc-cert nor --irc-key is specified.
-  + `--irc-key key.pem`, TLS key for IRC over TLS.
-  + `--irc-listen 127.1 ::1`, change IRC listen address to `127.1` and `::1`, overriding `--listen`.
-  + `--irc-password pass`, set the connection password to `pass`.
-  + `--irc-port 6667`, IRC server listen port.
-- Server side log
-  + `--logger-ignore '&test0' '&test1'`, list of ignored regex, do not log contacts/groups whose names match
-  + `--logger-mask '/tmp/wechat/$channel/%Y-%m-%d.log'`, format of log filenames
-  + `--logger-time-format %H:%M`, time format of server side log
+The server can only be bound to one wx.qq.com account, however, you may have more than one IRC clients connected to the server.
 
 ## IRC features
 
 - Standard IRC channels have names beginning with `#`.
 - WeChat groups have names beginning with `&`. The channel name is generated from the group title. `SpecialChannel#update`
 - Contacts have modes `+v` (voice, usually displayed with a prefix `+`). `SpecialChannel#update_detail`
+- Multi-line messages: `!m line0\nline1`
+- Multi-line messages: `!html line0<br>line1`
+- `nick0: nick1: test` will be converted to `@GroupAlias0 @GroupAlias1 test`, where `GroupAlias0` is `My Alias in Group`/`Name` in profile/`WeChat ID` set by that user. It corresponds to `On-screen names` in the mobile application.
+- Reply to the message at 12:34:SS: `@1234 !m multi\nline\nreply`, which will be sent as `「Re GroupAlias: text」text`
+- Reply to the message at 12:34:56: `!m @123456 multi\nline\nreply`
+- Reply to the penultimate message in this channel/chat: `@2 reply`
+
+`!m `, `@3 `, `nick: ` can be arranged in any order.
 
 `server-time` extension from IRC version 3.1, 3.2. `wechatircd.py` includes the timestamp (obtained from JavaScript) in messages to tell IRC clients that the message happened at the given time. See <http://ircv3.net/irc/>. See<http://ircv3.net/software/clients.html> for Client support of IRCv3.
 
@@ -114,21 +96,19 @@ Supported IRC commands:
 - `/dcc send $nick/$channel $filename`, send image or file。This feature borrows the command `/dcc send` which is well supported in IRC clients. See <https://en.wikipedia.org/wiki/Direct_Client-to-Client#DCC_SEND>.
 - `/invite $nick [$channel]`, invite a contact to the group.
 - `/kick $nick`, delete a group member. You must be the group leader to do this. Due to the defect of the Web client, you may not receive notifcations about the change of members.
+- `/kill $nick [$reason]`, cause the connection of that client to be closed
 - `/list`, list groups.
 - `/mode +m`, no rejoin in `--join new` mode. `/mode -m` to revert.
+- `/motd`, view latest 5 commits of this repo
 - `/names`, update nicks in the channel.
-- `/part $channel`, no longer receive messages from the channel. It just borrows the command `/part` and it will not leave the group.
+- `/part [$channel]`, no longer receive messages from the channel. It just borrows the command `/part` and it will not leave the group.
 - `/query $nick`, open a chat window with `$nick`.
+- `/squit $any`, log out
 - `/summon $nick $message`，add a contact.
 - `/topic topic`, change the topic of a group. Because IRC does not support renaming of a channel, you will leave the channel with the old name and join a channel with the new name.
 - `/who $channel`, see the member list.
 
-Multi-line messages:
-
-- `!m line0\nline1`
-- `!html line0<br>line1`
-
-![](https://maskray.me/static/2016-02-21-wechatircd/topic-kick-invite.jpg)
+![](https://maskray.me/static/2016-02-21-wechatircd/demo.jpg)
 
 ### Display
 
@@ -139,25 +119,50 @@ Multi-line messages:
 - `MSGTYPE_MICROVIDEO`，micro video?，displayed as `[MicroVideo] $url`
 - `MSGTYPE_APP`，articles from Subscription Accounts, Red Packet, URL, ..., displayed as `[App] $title $url`
 
-QQ emoji is displayed as `<img class="qqemoji qqemoji0" text="[Smile]_web" src="/zh_CN/htmledition/v2/images/spacer.gif">`, `[Smile]` in sent messages will be replaced to emoticon.
+QQ emojis are displayed as `<img class="qqemoji qqemoji0" text="[Smile]_web" src="/zh_CN/htmledition/v2/images/spacer.gif">`, `[Smile]` in sent messages will be replaced to emoticon.
 
-Emoji is rendered as `<img class="emoji emoji1f604" text="_web" src="/zh_CN/htmledition/v2/images/spacer.gif">`，it will be converted to a single character before delivered to the IRC client. Emoji may overlap as terminal emulators may not know emoji are of width 2，see [终端模拟器下使用双倍宽度多色Emoji字体](https://maskray.me/blog/2016-03-13-terminal-emulator-fullwidth-color-emoji).
+Emojis are rendered as `<img class="emoji emoji1f604" text="_web" src="/zh_CN/htmledition/v2/images/spacer.gif">`. Each emoji will be converted to a single character before delivered to the IRC client. Emojis may overlap as terminal emulators may not know emojis are of width 2，see [终端模拟器下使用双倍宽度多色Emoji字体](https://maskray.me/blog/2016-03-13-terminal-emulator-fullwidth-color-emoji).
+
+## Server options
+
+- Join mode, short option `-j`
+  + `--join auto`, default: join the channel upon receiving the first message, no rejoin after issuing `/part` and receiving messages later
+  + `--join all`: join all the channels
+  + `--join manual`: no automatic join
+  + `--join new`: like `auto`, but rejoin when new messages arrive even if after `/part`
+- Groups that should not join automatically. This feature supplements join mode.
+  + `--ignore 'fo[o]' bar`, do not auto join channels whose names(generated from Group Name) partially match regex `fo[o]` or `bar`
+  + `--ignore-display-name 'fo[o]' bar`, short option `-I`, do not auto join channels whose Group Name partially match regex `fo[o]` or `bar`
+- HTTP/WebSocket related options
+  + `--http-cert cert.pem`, TLS certificate for HTTPS/WebSocket. You may concatenate certificate+key, specify a single PEM file and omit `--http-key`. Use HTTP if neither `--http-cert` nor `--http-key` is specified.
+  + `--http-key key.pem`, TLS key for HTTPS/WebSocket
+  + `--http-listen 127.1 ::1`, change HTTPS/WebSocket listen address to `127.1` and `::1`, overriding `--listen`
+  + `--http-port 9000`, change HTTPS/WebSocket listen port to 9000
+  + `--http-root .`, the root directory to serve `injector.js`
+- `--listen 127.0.0.1`, short option `-l`, change IRC/HTTP/WebSocket listen address to `127.0.0.1`.
+- IRC related options
+  + `--irc-cert cert.pem`, TLS certificate for IRC over TLS. You may concatenate certificate+key, specify a single PEM file and omit `--irc-key`. Use plain IRC if neither --irc-cert nor --irc-key is specified.
+  + `--irc-key key.pem`, TLS key for IRC over TLS.
+  + `--irc-listen 127.1 ::1`, change IRC listen address to `127.1` and `::1`, overriding `--listen`.
+  + `--irc-nicks ray ray1`, reverved nicks for clients. `SpecialUser` will not have these nicks.
+  + `--irc-password pass`, set the connection password to `pass`.
+  + `--irc-port 6667`, IRC server listen port.
+- Server side log
+  + `--logger-ignore '&test0' '&test1'`, list of ignored regex, do not log contacts/groups whose names partially match
+  + `--logger-mask '/tmp/wechat/$channel/%Y-%m-%d.log'`, format of log filenames
+  + `--logger-time-format %H:%M`, time format of entries of server side log
+
+See [wechatircd.service](wechatircd.service) for a template of `/etc/systemd/system/wechatircd.service`.
 
 ## Changes in `injector.js`
 
-Changes are marked with `//@`.
-
-### Beginning of `webwxapp.js`
-
-Create a WebSocket connection to the server and retry on failures.
-
-### Send the contact list to the server periodically
-
-Fetch contacts, groups and subscription accounts every 5 seconds, and send them to the server.
+- Create a WebSocket connection to the server and retry on failures.
+- Hook `contactFactory#{addContact,deleteContact}` to watch changes to the contacts.
+- `CtrlServer#onmessage`, handle commands (text/file messages, invite someone to the group, ...) from the server.
+- `CtrlServer#seenLocalID`, prevent the client from receiving messages sent by itself.
 
 ## `wechatircd.py`
 
-Copied a lot of protocol related stuff from miniircd.
 
 ```
 .
@@ -179,7 +184,7 @@ Copied a lot of protocol related stuff from miniircd.
 
 ### Motivation
 
-- Replace the mobile client with your IRC client. See [WeeChat操作各种聊天软件](https://maskray.me/blog/2016-08-13-weechat-rules-all).
+- Replace the mobile application with your IRC client. See [WeeChat操作各种聊天软件](https://maskray.me/blog/2016-08-13-weechat-rules-all).
 - Bot
 - Log. It is difficult to export log from the mobile client <https://maskray.me/blog/2014-10-14-wechat-export>
 
@@ -215,9 +220,83 @@ angular.element('pre:last').scope().editAreaCtn = "Hello，微信";
 angular.element('pre:last').scope().sendTextMessage();
 ```
 
+### Headless browser on Linux
+
+If you cannot tolerant scanning QR codes with your phone everyday, you can run the browser and wechatircd on a server.
+
+- Create a new browser user profile with `chromium --user-data-dir=$HOME/.config/chromium-wechatircd`, and do the aforementioned configuration (certificate for `injector.js`, Tampermonkey, `injector.user.js`), then close the browser.
+- Install xvfb (`xorg-server-xvfb` on Arch Linux)
+- `xvfb-run -n 99 chromium --user-data-dir=$HOME/.config/chromium-wechatircd https://wx.qq.com`
+- Wait a few seconds for the QR code. `DISPLAY=:99 import -window root /tmp/a.jpg && $your_image_viewer /tmp/a.jpg`, take a screenshot and scan the QR code with your mobile application.
+
+You can interact with the browser using VNC:
+
+- `x11vnc -localhost -display :99`
+- In another terminal, `vncviewer localhost`
+
+An alternative is x2go, see [无需每日扫码的IRC版微信和QQ：wechatircd、webqqircd](https://maskray.me/blog/2016-07-06-wechatircd-webqqircd-without-scanning-qrcode-daily).
+
+### How are nicks generated?
+
+On the mobile application, users' `On-screen Names` are resolved in this order:
+- `Set Remark and Tag` if set
+- `My Alias in Group`(`Group Alias`) if set
+- `Name` in his/her profile
+- `WeChat ID`
+
+Contact information is given in APIs `batchgetcontact` and `webwxsync`. The JSON serialization uses misleading field names.
+
+WeChat friend in `contactFactory#addContact`:
+
+- `.Alias`: `Name` in his/her profile
+- `.NickName`: `WeChat ID`
+- `.RemarkName`: `Set Remark and Tag`
+
+WeChat friend/non-contact in `.MemberList`:
+
+- `.DisplayName`: `My Alias in Group`
+- `.NickName`: `Name` in his/her profile or `WeChat ID`
+
+JSON for one user may be returned repeatedly and all these fields may be empty. Users' nicks are generated by looking for the first non-empty value from these fields: `.RemarkName`, `.NickName`, `.DisplayName`. You may see `xx now known as yy` in your IRC client if a room contact shares multple rooms with you.
+
+## Known issues
+
+### `Uncaught TypeError: angular.extend is not a function`
+
+You may see these messages in the DevTools console:
+
+```
+Uncaught TypeError: angular.extend is not a function
+    at Object.setUserInfo (index_0c7087d.js:4)
+    at index_0c7087d.js:2
+    at c (vendor_2de5d3a.js:11)
+    at vendor_2de5d3a.js:11
+    at c.$eval (vendor_2de5d3a.js:11)
+    at c.$digest (vendor_2de5d3a.js:11)
+    at c.$apply (vendor_2de5d3a.js:11)
+    at l (vendor_2de5d3a.js:11)
+    at m (vendor_2de5d3a.js:11)
+    at XMLHttpRequest.C.onreadystatechange (vendor_2de5d3a.js:11)
+```
+
+```
+Uncaught TypeError: angular.forEach is not a function
+```
+
+`injector.js` should be executed after `vendor_*.js` and before `index_*.js`. However, TamperMonkey cannot finely control the execution time due to the limitation of Chrome.
+
+### Cannot send/receive new messages when the webpage disconnects from wx.qq.com
+
+The WebSocket connection to `wechatircd.py` should be closed in this case, let users know they should reload the webpage.
+
+### Others
+
+- Log filenames may contain invalid filenames (`:`) on Windows
+- Stable channel names. This makes server-side log coherent and users will not be distracted by `PART (Change name)` `JOIN` messages. Channel names are generated from `.NickName` (Group Name) and Group Name may change. I do not know any persistent ID of an account/group because `UserName` changes in each new session.
+
 ## References
 
-- [miniircd](https://github.com/jrosdahl/miniircd)
+- [miniircd](https://github.com/jrosdahl/miniircd). Copied a lot of protocol related stuff from miniircd.
 - [RFC 2810: Internet Relay Chat: Architecture](https://tools.ietf.org/html/rfc2810)
 - [RFC 2811: Internet Relay Chat: Channel Management](https://tools.ietf.org/html/rfc2811)
 - [RFC 2812: Internet Relay Chat: Client Protocol](https://tools.ietf.org/html/rfc2812)

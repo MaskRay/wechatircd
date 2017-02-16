@@ -3,7 +3,7 @@ const Common = {
   EMOJI_MAXIUM_SIZE: 120,
   WEBSOCKET_URL: 'wss://127.0.0.1:9000/ws',
   DEBUG: false,
-  SEND_TEXT_MESSAGE_TIMEOUT: 10,
+  SEND_TEXT_MESSAGE_TIMEOUT: 5,
 }
 
 const console2 = {
@@ -23,7 +23,7 @@ class CtrlServer {
     setInterval(() => this.sync_contacts(), 5000)
 
     this.localID = null // 服务端通过WebSocket控制网页版发送消息时指定LocalID，区分网页版上发送的消息(需要投递到服务端)与服务端发送的消息(不需要投递)
-    this.seenLocalID = new Set() // 记录服务端请求发送的消息的LocalID，避免服务端收到自己发送的消息
+    this.seenLocalID = new Map() // 记录LocalID和对应的IRC client nick，避免该client收到自己发送的消息
     this.contacts = new Map
     this.reset()
   }
@@ -38,9 +38,8 @@ class CtrlServer {
     try {
       data = JSON.parse(data.detail)
       switch (data.command) {
-      case 'close':
-        this.close()
-        this.open(false)
+      case 'reset':
+        this.reset()
         break
       case 'add_friend':
         $.ajax({
@@ -55,7 +54,7 @@ class CtrlServer {
               Value: data.user,
               VerifyUserTicket: ""
             }],
-            VerifyContent: data.message,
+            VerifyContent: data.text,
             SceneListCount: 1,
             SceneList: [confFactory.ADDSCENE_PF_WEB],
             skey: accountFactory.getSkey()
@@ -67,6 +66,13 @@ class CtrlServer {
           console2.error('- add_friend_nak')
           this.send({command: 'add_friend_nak', user: data.user})
         })
+        break
+      case 'logout':
+        angular.element($('.panel')[0]).scope().toggleSystemMenu()
+        $('#mmpop_system_menu a[title="Log Out"]').click()
+        break
+      case 'reload':
+        location.reload()
         break
       case 'send_file':
         let uploadmediarequest = JSON.stringify(Object.assign({}, accountFactory.getBaseRequest(), {
@@ -149,24 +155,22 @@ class CtrlServer {
         try {
           chatFactory.setCurrentUserName(data.receiver)
           let localID = this.localID = (utilFactory.now() + Math.random().toFixed(3)).replace(".", "")
-          this.seenLocalID.add(localID)
-          if (data.message.startsWith('!html '))
-            data.message = data.message.substr(6)
-          else if (data.message.startsWith('!m '))
-            data.message = data.message.substr(3).replace(/\\n/g, '\n').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          this.seenLocalID.set(localID, data.client)
+          if (data.text.startsWith('!html '))
+            data.text = data.text.substr(6)
           else
-            data.message = data.message.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-          editArea.editAreaCtn = data.message
+            data.text = data.text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          editArea.editAreaCtn = data.text
           editArea.sendTextMessage()
           setTimeout(() => {
             if (this.seenLocalID.has(localID))
               this.send({command: 'send_text_message_nak',
                 receiver: data.receiver,
-                message: data.message
+                text: data.text
               })
-          }, Common.SEND_TEXT_MESSAGE_TIMEOUT)
+          }, Common.SEND_TEXT_MESSAGE_TIMEOUT * 1000)
         } catch (ex) {
-          this.send({command: 'web_debug', message: 'send text message exception: '  + ex.message + "\nstack: " + ex.stack})
+          this.send({command: 'web_debug', text: 'send text message exception: '  + ex.message + "\nstack: " + ex.stack})
           console2.error(ex.stack)
         } finally {
           this.localID = null
@@ -198,7 +202,7 @@ class CtrlServer {
         break
       }
     } catch (ex) {
-      this.send({command: 'web_debug', message: 'handle message exception: '  + ex.message + "\nstack: " + ex.stack})
+      this.send({command: 'web_debug', text: 'handle message exception: '  + ex.message + "\nstack: " + ex.stack})
       console2.error(ex.stack)
     }
   }
@@ -239,6 +243,19 @@ class CtrlServer {
   }
 
   sync_contacts() {
+    function decode(s) {
+      return (s || '').replace(/<span class="emoji emoji([0-9a-f]+)"><\/span>/g, (_, x) => {
+        try {
+          let a = null
+          if (x.length === 4 || x.length === 5) a = [x]
+          else if (x.length === 8) a = [x.substr(0, 4), x.substr(4, 4)]
+          else if (x.length === 10) a = [x.substr(0, 5), x.substr(5, 5)]
+          return String.fromCodePoint.apply(null, a.map(i => parseInt(i, 16)))
+        } catch (ex) {
+          return ''
+        }
+      })
+    }
     if (! (window.contactFactory && this.ws && this.ws.readyState === WebSocket.OPEN)) return
     try {
       if (this.pending_self) {
@@ -257,9 +274,12 @@ class CtrlServer {
           if (this.contacts.has(username)) {
             const x = this.contacts.get(username)
             let y = {
-              DisplayName: x.RemarkName || x.DisplayName || x.NickName,
-              NickName: x.NickName,
+              Alias: decode(x.Alias),
+              DisplayName: decode(x.DisplayName),
+              Nick: decode(x.RemarkName || x.NickName),
+              NickName: decode(x.NickName),
               OwnerUin: x.OwnerUin,
+              Uin: x.Uin,
               UserName: x.UserName,
             }
             if (x.VerifyFlag & confFactory.MM_USERATTRVERIFYFALG_BIZ_BRAND // isBrandContact()
@@ -271,14 +291,12 @@ class CtrlServer {
                 for (let xx of x.MemberList) {
                   const z = this.contacts.get(xx.UserName) || {}
                   const yy = {
-                    DisplayName: z.RemarkName || z.DisplayName || z.NickName || xx.RemarkName || xx.DisplayName || xx.NickName,
-                    NickName: z.NickName || xx.NickName,
-                    Uin: z.Uin || xx.Uin,
-                    UserName: z.UserName || xx.UserName,
+                    Nick: decode(z.RemarkName || z.NickName || xx.NickName || xx.DisplayName),
+                    DisplayName: decode(xx.DisplayName),
+                    Uin: xx.Uin,
+                    UserName: xx.UserName,
                   }
                   members.push(yy)
-                  //if (xx.UserName.match(/^@d2b7/))
-                  //  debugger
                   // prevent a RoomContact from changing his name if he is a member of several groups
                   if (! this.contacts.has(xx.UserName))
                     this.contacts.set(xx.UserName, yy)
@@ -305,7 +323,7 @@ class CtrlServer {
       }
     } catch (ex) {
       console2.error(ex.stack)
-      this.send({command: 'web_debug', message: 'sync contact exception: ' + ex.message + "\nstack: " + ex.stack})
+      this.send({command: 'web_debug', text: 'sync contact exception: ' + ex.message + "\nstack: " + ex.stack})
     }
   }
 }
@@ -535,79 +553,72 @@ class Injector {
 
           //@ PATCH
           try {
-              // 服务端通过WebSocket控制网页版发送消息，无需投递到服务端
-              if (window.ctrlServer.seenLocalID.has(e.LocalID))
+              let sender = contactFactory.getContact(e.MMActualSender)
+              let receiver = contactFactory.getContact(e.MMIsChatRoom ? e.MMPeerUserName : e.ToUserName)
+              // 某个IRC client通过WebSocket控制网页版发送消息，无需投递到该client
+              let client = ''
+              if (window.ctrlServer.seenLocalID.has(e.LocalID)) {
+                  client = window.ctrlServer.seenLocalID.get(e.LocalID)
                   window.ctrlServer.seenLocalID.delete(e.LocalID)
-              // 非服务端生成
-              else {
-                  let sender = contactFactory.getContact(e.MMActualSender)
-                  let receiver = contactFactory.getContact(e.MMIsChatRoom ? e.MMPeerUserName : e.ToUserName)
-                  if (sender && receiver) {
-                      sender = Object.assign({}, sender, {DisplayName: sender.RemarkName || sender.getDisplayName()})
-                      receiver = Object.assign({}, receiver, {DisplayName: receiver.RemarkName || receiver.getDisplayName()})
-                      delete sender.MemberList
-                      delete receiver.MemberList
-                      if (e.MMLocationUrl)
-                          content = `[位置] ${e.MMLocationDesc} ${e.MMLocationUrl}`
-                      else if (e.MsgType == confFactory.MSGTYPE_IMAGE) // 3 图片
-                          // e.getMsgImg
-                          content = '[图片] ' + 'https://wx.qq.com'+confFactory.API_webwxgetmsgimg + "?MsgID=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
-                      else if (e.MsgType == confFactory.MSGTYPE_VOICE) // 34 语音
-                          content = '[语音] ' + 'https://wx.qq.com'+confFactory.API_webwxgetvoice + "?msgid=" + e.MsgId + "&skey=" + accountFactory.getSkey()
-                      else if (e.MsgType == confFactory.MSGTYPE_VERIFYMSG) { // 37 新的朋友
-                          let info = e.RecommendInfo
-                          let gender = info.Sex == 1 ? '男' : info.Sex == 2 ? '女' : '未知'
-                          content = `[新的朋友] 昵称：${info.NickName} 性别：${gender} 省：${info.Province} 介绍：${info.Content} 头像：https://wx.qq.com${info.HeadImgUrl}`
-                      }
-                      else if (e.MsgType == confFactory.MSGTYPE_SHARECARD) { // 42 名片
-                          let info = e.RecommendInfo
-                          let gender = info.Sex == 1 ? '男' : info.Sex == 2 ? '女' : '未知'
-                          content = `[名片] 昵称：${info.NickName} 性别：${gender} 省：${info.Province} 头像：https://wx.qq.com${info.HeadImgUrl}`
-                      }
-                      else if (e.MsgType == confFactory.MSGTYPE_VIDEO) // 43 视频
-                          // e.getMsgVideo
-                          content = '[视频] ' + 'https://wx.qq.com'+confFactory.API_webwxgetvideo + "?msgid=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
-                      else if (e.MsgType == confFactory.MSGTYPE_EMOTICON) // 47 动画表情
-                          // e.getMsgImg + HTML
-                          content = '[动画表情] ' + 'https://wx.qq.com'+confFactory.API_webwxgetmsgimg + "?MsgID=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
-                      else if (e.MsgType == confFactory.MSGTYPE_LOCATION) // 48 位置 目前尚未实现
-                          content = '[位置]'
-                      else if (e.MsgType == confFactory.MSGTYPE_APP) { // 49
-                          if (e.AppMsgType == confFactory.APPMSGTYPE_ATTACH) {
-                              content = `[文件] filename: ${e.FileName} size: ${e.MMAppMsgFileSize} url: ${e.MMAppMsgDownloadUrl}`
-                          } else {
-                              let doms = $.parseHTML(content.replace(/&lt;?/g,'<').replace(/&gt;?/g,'>').replace(/&amp;?/g,'&'))
-                              content = '[App] ' + $('appmsg>title', doms).text() + ' ' + $('appmsg>url', doms).text()
-                          }
-                      }
-                      else if (e.MsgType == confFactory.MSGTYPE_MICROVIDEO) // 62 小视频
-                          content = '[小视频] ' + 'https://wx.qq.com'+confFactory.API_webwxgetvideo + "?msgid=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
-                      else if (e.MsgType == confFactory.MSGTYPE_SYS) // 10000 系统，如：“您已添加了xxx，现在可以开始聊天了。”、“xx邀请了yy加入了群聊。”、“如需将文字消息的语言翻译成系统语言，可以长按消息后选择"翻译"”
-                          content = '[系统] ' + content
-                      else if (e.MsgType == confFactory.MSGTYPE_RECALLED) // 10002 撤回
-                          content = '[撤回了一条消息]'
-                      if (e.MMIsChatRoom) {
-                          window.ctrlServer.send({command: 'room_message',
-                                  sender: sender,
-                                  receiver: receiver,
-                                  message: content,
-                                  time: e.CreateTime
-                          })
-                          // 发送成功(无异常)则标记为已读
-                          e.MMUnread = false
-                      } else if (! sender.isBrandContact()) {
-                          window.ctrlServer.send({command: 'message',
-                                  sender: sender,
-                                  receiver: receiver,
-                                  message: content,
-                                  time: e.CreateTime
-                          })
-                          e.MMUnread = false
+              }
+              if (sender && receiver) {
+                  sender = Object.assign({}, sender, {Nick: sender.RemarkName || sender.getDisplayName()})
+                  receiver = Object.assign({}, receiver, {Nick: receiver.RemarkName || receiver.getDisplayName()})
+                  delete sender.MemberList
+                  delete receiver.MemberList
+                  if (e.MMLocationUrl)
+                      content = `[位置] ${e.MMLocationDesc} ${e.MMLocationUrl}`
+                  else if (e.MsgType == confFactory.MSGTYPE_IMAGE) // 3 图片
+                      // e.getMsgImg
+                      content = '[图片] ' + 'https://wx.qq.com'+confFactory.API_webwxgetmsgimg + "?MsgID=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
+                  else if (e.MsgType == confFactory.MSGTYPE_VOICE) // 34 语音
+                      content = '[语音] ' + 'https://wx.qq.com'+confFactory.API_webwxgetvoice + "?msgid=" + e.MsgId + "&skey=" + accountFactory.getSkey()
+                  else if (e.MsgType == confFactory.MSGTYPE_VERIFYMSG) { // 37 新的朋友
+                      let info = e.RecommendInfo
+                      let gender = info.Sex == 1 ? '男' : info.Sex == 2 ? '女' : '未知'
+                      content = `[新的朋友] 昵称：${info.NickName} 性别：${gender} 省：${info.Province} 介绍：${info.Content} 头像：https://wx.qq.com${info.HeadImgUrl}`
+                  }
+                  else if (e.MsgType == confFactory.MSGTYPE_SHARECARD) { // 42 名片
+                      let info = e.RecommendInfo
+                      let gender = info.Sex == 1 ? '男' : info.Sex == 2 ? '女' : '未知'
+                      content = `[名片] 昵称：${info.NickName} 性别：${gender} 省：${info.Province} 头像：https://wx.qq.com${info.HeadImgUrl}`
+                  }
+                  else if (e.MsgType == confFactory.MSGTYPE_VIDEO) // 43 视频
+                      // e.getMsgVideo
+                      content = '[视频] ' + 'https://wx.qq.com'+confFactory.API_webwxgetvideo + "?msgid=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
+                  else if (e.MsgType == confFactory.MSGTYPE_EMOTICON) // 47 动画表情
+                      // e.getMsgImg + HTML
+                      content = '[动画表情] ' + 'https://wx.qq.com'+confFactory.API_webwxgetmsgimg + "?MsgID=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
+                  else if (e.MsgType == confFactory.MSGTYPE_LOCATION) // 48 位置 目前尚未实现
+                      content = '[位置]'
+                  else if (e.MsgType == confFactory.MSGTYPE_APP) { // 49
+                      if (e.AppMsgType == confFactory.APPMSGTYPE_ATTACH) {
+                          content = `[文件] filename: ${e.FileName} size: ${e.MMAppMsgFileSize} url: ${e.MMAppMsgDownloadUrl}`
+                      } else {
+                          let doms = $.parseHTML(content.replace(/&lt;?/g,'<').replace(/&gt;?/g,'>').replace(/&amp;?/g,'&'))
+                          content = '[App] ' + $('appmsg>title', doms).text() + ' ' + $('appmsg>url', doms).text()
                       }
                   }
+                  else if (e.MsgType == confFactory.MSGTYPE_MICROVIDEO) // 62 小视频
+                      content = '[小视频] ' + 'https://wx.qq.com'+confFactory.API_webwxgetvideo + "?msgid=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
+                  else if (e.MsgType == confFactory.MSGTYPE_SYS) // 10000 系统，如：“您已添加了xxx，现在可以开始聊天了。”、“xx邀请了yy加入了群聊。”、“如需将文字消息的语言翻译成系统语言，可以长按消息后选择"翻译"”
+                      content = '[系统] ' + content
+                  else if (e.MsgType == confFactory.MSGTYPE_RECALLED) // 10002 撤回
+                      content = '[撤回了一条消息]'
+                  window.ctrlServer.send({command: 'message',
+                          id: e.MsgId,
+                          type: e.MMIsChatRoom ? 'room' : undefined,
+                          client: client,
+                          from: sender,
+                          to: receiver,
+                          text: content,
+                          time: e.CreateTime
+                  })
+                  // 发送成功(无异常)则标记为已读
+                  e.MMUnread = false
               }
           } catch (ex) {
-              window.ctrlServer.send({command: 'web_debug', message: 'message exception: '  + ex.message + "\nstack: " + ex.stack})
+              window.ctrlServer.send({command: 'web_debug', text: 'message exception: '  + ex.message + "\nstack: " + ex.stack})
               console2.error(ex.stack)
           }
 

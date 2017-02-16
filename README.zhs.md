@@ -1,6 +1,6 @@
 # wechatircd
 
-wechatircd类似于bitlbee，在微信网页版和IRC间建起桥梁，可以使用IRC客户端收发微信朋友、群消息、设置群名、邀请删除成员等。
+wechatircd在wx.qq.com里注入JavaScript，用WebSocket与IRC server(`wechatircd.py`)通信，使得IRC客户端可以收发微信朋友、群消息、设置群名、邀请删除成员等。
 
 ```
            IRC               WebSocket                 HTTPS
@@ -9,10 +9,7 @@ IRC client --- wechatircd.py --------- browser         ----- wx.qq.com
                                        injector.js
 ```
 
-## 安装
-
-需要Python 3.5或以上，支持`async/await`语法
-`pip install -r requirements.txt`安装依赖
+加入freenode的#wechatircd频道，或[Telegram group](https://t.me/wechatircd)。
 
 ### Arch Linux
 
@@ -22,22 +19,24 @@ IRC client --- wechatircd.py --------- browser         ----- wx.qq.com
 
 IRC服务器默认监听127.0.0.1:6667 (IRC)和127.0.0.1:9000 (HTTPS + WebSocket over TLS)。
 
-如果你在非本机运行，建议配置IRC over TLS，设置IRC connection password：`/usr/bin/wechatircd --http-cert /etc/wechatircd/cert.pem --http-key /etc/wechatircd/key.pem --http-root /usr/share/wechatircd --irc-cert /path/to/irc.key --irc-key /path/to/irc.cert --irc-password yourpassword`
+如果你在非本机运行，建议配置IRC over TLS，设置IRC connection password，添加这些选项：`--irc-cert /path/to/irc.key --irc-key /path/to/irc.cert --irc-password yourpassword`。
 
 可以把HTTPS私钥证书用作IRC over TLS私钥证书。使用WeeChat的话，如果觉得让WeeChat信任证书比较麻烦(gnutls会检查hostname)，可以用：
 ```
-set irc.server.wechat.ssl on`
+set irc.server.wechat.ssl on
 set irc.server.wechat.ssl_verify off
-set irc.server.wechat.password yourpassword`
+set irc.server.wechat.password yourpassword
 ```
 
 ### 其他发行版
 
+- python >= 3.5
+- `pip install -r requirements.txt`
 - `openssl req -newkey rsa:2048 -nodes -keyout key.pem -x509 -out cert.pem -subj '/CN=127.0.0.1' -days 9999`创建密钥与证书。
 - 把`cert.pem`导入浏览器，见下文
 - `./wechatircd.py --http-cert cert.pem --http-key key.pem`
 
-### 导入自签名证书到浏览器
+### Userscript和自签名证书
 
 Chrome/Chromium
 
@@ -49,7 +48,7 @@ Firefox
 - 访问<https://127.0.0.1:9000/injector.js>，报告Your connection is not secure，Advanced->Add Exception->Confirm Security Exception
 - 安装Greasemonkey扩展，安装userscript
 
-![](https://maskray.me/static/2016-02-21-wechatircd/run.jpg)
+![](https://maskray.me/static/2016-02-21-wechatircd/meow.jpg)
 
 HTTPS、WebSocket over TLS默认用9000端口，使用其他端口需要修改userscript，启动`wechatircd.py`时用`--web-port 10000`指定其他端口。
 
@@ -59,73 +58,55 @@ HTTPS、WebSocket over TLS默认用9000端口，使用其他端口需要修改us
 - 访问<https://wx.qq.com>，userscript注入的JavaScript会向服务器发起WebSocket连接
 - IRC客户端连接127.1:6667(weechat的话使用`/server add wechat 127.1/6667`)，会自动加入`+wechat` channel
 
-在`+wechat`发信并不会群发，只是为了方便查看有哪些朋友。
-微信朋友的nick优先选取备注名(`RemarkName`)，其次为`DisplayName`(原始JS根据昵称等自动填写的一个名字)
-
-在`+wechat` channel可以执行一些命令：
+在`+wechat`发信并不会群发，只是为了方便查看有哪些朋友。在`+wechat` channel可以执行一些命令：
 
 - `help`，帮助
+- `eval $expr`: 比如`eval server.nick2special_user` `eval server.name2special_room`
 - `status [pattern]`，已获取的微信朋友、群列表，支持 pattern 参数用来筛选满足 pattern 的结果，目前仅支持子串查询。如要查询所有群，由于群由 `&` 开头，所以可以执行 `status &`。
-- `eval $password $expr`: 如果运行时带上了`--password $password`选项，这里可以eval，方便调试，比如`eval $password client.wechat_users`
+- `reload_contact __all__`，遇到`no nuch nick/channel`消息时可用，会重新加载所有联系人信息
 
-## 服务器选项
+服务器只能和一个帐号绑定，但支持多个IRC客户端。
 
-- Join mode. There are three modes, the default is `--join auto`: join the channel upon receiving the first message, no rejoin after issuing `/part` and receiving messages later. The other three are `--join all`: join all the channels; `--join manual`: no automatic join; `--join new`: like `auto`, but rejoin when new messages arrive even if after `/part`.
-- Groups that should not join automatically. This feature supplements join mode.
-  + `--ignore 'fo[o]' bar`, do not auto join chatrooms whose channel name(generated from DisplayName) matches regex `fo[o]` or `bar`
-  + `--ignore-display-name 'fo[o]' bar`, do not auto join chatrooms whose DisplayName matches regex `fo[o]` or `bar`
-- HTTP/WebSocket related options
-  + `--http-cert cert.pem`, TLS certificate for HTTPS/WebSocket. You may concatenate certificate+key, specify a single PEM file and omit `--http-key`. Use HTTP if neither --http-cert nor --http-key is specified.
-  + `--http-key key.pem`, TLS key for HTTPS/WebSocket.
-  + `--http-listen 127.1 ::1`, change HTTPS/WebSocket listen address to `127.1` and `::1`, overriding `--listen`.
-  + `--http-port 9000`, change HTTPS/WebSocket listen port to 9000.
-  + `--http-root .`, the root directory to serve `injector.js`.
-- `-l 127.0.0.1`, change IRC/HTTP/WebSocket listen address to `127.0.0.1`.
-- IRC related options
-  + `--irc-cert cert.pem`, TLS certificate for IRC over TLS. You may concatenate certificate+key, specify a single PEM file and omit `--irc-key`. Use plain IRC if neither --irc-cert nor --irc-key is specified.
-  + `--irc-key key.pem`, TLS key for IRC over TLS.
-  + `--irc-listen 127.1 ::1`, change IRC listen address to `127.1` and `::1`, overriding `--listen`.
-  + `--irc-password pass`, set the connection password to `pass`.
-  + `--irc-port 6667`, IRC server listen port.
-- Server side log
-  + `--logger-ignore '&test0' '&test1'`, list of ignored regex, do not log contacts/groups whose names match
-  + `--logger-mask '/tmp/wechat/$channel/%Y-%m-%d.log'`, format of log filenames
-  + `--logger-time-format %H:%M`, time format of server side log
-
-## IRC命令
+## IRC功能
 
 - 标准IRC channel名以`#`开头
 - WeChat群名以`&`开头。`SpecialChannel#update`
 - 联系人带有mode `+v` (voice, 通常显示为前缀`+`)。`SpecialChannel#update_detail`
+- 多行消息：`!m line0\nline1`
+- 多行消息：`!html line0<br>line1`
+- `nick0: nick1: test`会被转换成`@GroupAlias0 @GroupAlias1 test`，`GroupAlias0` 是那个用户自己设置的名字，不是你设置的`Set Remark and Tag`，对应移动端的`On-screen names`
+- 回复12:34:SS的消息：`@1234 !m multi\nline\nreply`，会发送`「Re GroupAlias: text」text`
+- 回复12:34:56的消息：`!m @123456 multi\nline\nreply`
+- 回复朋友/群的倒数第二条消息：`@2 reply`
 
-`server-time` extension from IRC version 3.1, 3.2. `wechatircd.py` includes the timestamp (obtained from JavaScript) in messages to tell IRC clients that the message happened at the given time. See <http://ircv3.net/irc/>. See<http://ircv3.net/software/clients.html> for Client support of IRCv3.
+`!m `, `@3 `, `nick: `可以任意安排顺序。
 
-Configuration for WeeChat:
+若客户端启用IRC 3.1 3.2的`server-time`扩展，`wechatircd.py`会在发送的消息中包含 网页版获取的时间戳。客户端显示消息时时间就会和服务器收到的消息的时刻一致。参见<http://ircv3.net/irc/>。参见<http://ircv3.net/software/clients.html>查看IRCv3的客户端支持情况。
+
+WeeChat配置方式：
 ```
 /set irc.server_default.capabilities "account-notify,away-notify,cap-notify,multi-prefix,server-time,znc.in/server-time-iso,znc.in/self-message"
 ```
 
-Supported IRC commands:
+支持的IRC命令：
 
-- `/cap`, supported capabilities.
-- `/dcc send $nick/$channel $filename`, send image or file。This feature borrows the command `/dcc send` which is well supported in IRC clients. See <https://en.wikipedia.org/wiki/Direct_Client-to-Client#DCC_SEND>.
-- `/invite $nick [$channel]`, invite a contact to the group.
-- `/kick $nick`, delete a group member. You must be the group leader to do this. Due to the defect of the Web client, you may not receive notifcations about the change of members.
-- `/list`, list groups.
-- `/mode +m`, no rejoin in `--join new` mode. `/mode -m` to revert.
-- `/names`, update nicks in the channel.
-- `/part $channel`, no longer receive messages from the channel. It just borrows the command `/part` and it will not leave the group.
-- `/query $nick`, open a chat window with `$nick`.
-- `/summon $nick $message`，add a contact.
-- `/topic topic`, change the topic of a group. Because IRC does not support renaming of a channel, you will leave the channel with the old name and join a channel with the new name.
-- `/who $channel`, see the member list.
+- `/cap`，列出支持的capabilities
+- `/dcc send $nick/$channel $filename`, 发送图片或文件。借用了IRC客户端的`/dcc send`命令，但含义不同，参见<https://en.wikipedia.org/wiki/Direct_Client-to-Client#DCC_SEND>
+- `/invite $nick [$channel]`，邀请用户加入群
+- `/kick $nick`，删除群成员，群主才有效。由于网页版限制，可能收不到群成员变更的消息
+- `/kill $nick [$reason]`，断开指定客户端的连接
+- `/list`，列出所有群
+- `/mode +m`, `--join new`模式下防止自动重新join。用`/mode -m`撤销
+- `/motd`，查看本repo最近5个commits
+- `/names`, 更新当前群成员列表
+- `/part [$channel]`的IRC原义为离开channel，这里表示当前IRC会话中不再接收该群的消息。不用担心，telegramircd并没有主动退出群的功能
+- `/query $nick`，打开和`$nick`聊天的窗口
+- `/squit $any`，log out
+- `/summon $nick $message`，发送添加朋友请求，`$message`为备注消息
+- `/topic topic`修改群标题。因为IRC不支持channel改名，实现为离开原channel并加入新channel
+- `/who $channel`，查看群的成员列表
 
-Multi-line messages:
-
-- `!m line0\nline1`
-- `!html line0<br>line1`
-
-![](https://maskray.me/static/2016-02-21-wechatircd/topic-kick-invite.jpg)
+![](https://maskray.me/static/2016-02-21-wechatircd/demo.jpg)
 
 ### 显示
 
@@ -140,25 +121,43 @@ QQ表情会显示成`<img class="qqemoji qqemoji0" text="[Smile]_web" src="/zh_C
 
 Emoji在网页上呈现时为`<img class="emoji emoji1f604" text="_web" src="/zh_CN/htmledition/v2/images/spacer.gif">`，传送至IRC时转换成单个emoji字符。若使用终端IRC客户端，会因为emoji字符宽度为1导致重叠，参见[终端模拟器下使用双倍宽度多色Emoji字体](https://maskray.me/blog/2016-03-13-terminal-emulator-fullwidth-color-emoji)。
 
+## 服务器选项
+
+- Join mode，短选项`-j`
+  + `--join auto`，默认：收到某个群第一条消息后自动加入，如果执行过`/part`命令了，则之后收到消息不会重新加入
+  + `--join all`：加入所有channel
+  + `--join manual`：不自动加入
+  + `--join new`：类似于`auto`，但执行`/part`命令后，之后收到消息仍自动加入
+- 指定不自动加入的群名，用于补充join mode
+  + `--ignore 'fo[o]' bar`，channel名部分匹配正则表达式`fo[o]`或`bar`
+  + `--ignore-topic 'fo[o]' bar`, 群标题部分匹配正则表达式`fo[o]`或`bar`
+- HTTP/WebSocket相关选项
+  + `--http-cert cert.pem`，HTTPS/WebSocketTLS的证书。你可以把证书和私钥合并为一个文件，省略`--http-key`选项。如果`--http-cert`和`--http-key`均未指定，使用不加密的HTTP
+  + `--http-key key.pem`，HTTPS/WebSocket的私钥
+  + `--http-listen 127.1 ::1`，HTTPS/WebSocket监听地址设置为`127.1`和`::1`，overriding `--listen`
+  + `--http-port 9000`，HTTPS/WebSocket监听端口设置为9000
+  + `--http-root .`, 存放`injector.js`的根目录
+- `-l 127.0.0.1`，IRC/HTTP/WebSocket监听地址设置为`127.0.0.1`
+- IRC相关选项
+  + `--irc-cert cert.pem`，IRC over TLS的证书。你可以把证书和私钥合并为一个文件，省略`--irc-key`选项。如果`--irc-cert`和`--irc-key`均未指定，使用不加密的IRC
+  + `--irc-key key.pem`，IRC over TLS的私钥
+  + `--irc-listen 127.1 ::1`，IRC over TLS监听地址设置为`127.1`和`::1`，overriding `--listen`
+  + `--irc-nicks ray ray1`，给客户端保留的nick。`SpecialUser`不会占用这些名字
+  + `--irc-password pass`，IRC connection password设置为`pass`
+  + `--irc-port 6667`，IRC监听端口
+- 服务端日志
+  + `--logger-ignore '&test0' '&test1'`，不记录部分匹配指定正则表达式的朋友/群日志
+  + `--logger-mask '/tmp/wechat/$channel/%Y-%m-%d.log'`，日志文件名格式
+  + `--logger-time-format %H:%M`，日志单条消息的时间格式
+
 ## JS改动
 
-修改的地方都有`//@`标注，结合diff，方便微信网页版JS更新后重新应用这些修改。增加的代码中大多数地方都用`try catch`保护，出错则`consoleerr(ex.stack)`。原始JS把`console`对象抹掉了……`consoleerr`是我保存的一个副本。
+- 创建到服务端的WebSocket连接，自动重连
+- Hook `contactFactory#{addContact,deleteContact}`记录联系人列表的变更
+- `CtrlServer#onmessage`，处理服务端的控制命令
+- `CtrlServer#seenLocalID`，防止客户端收到自己发送的消息
 
-目前的改动如下：
-
-### `webwxapp.js`开头
-
-创建到服务端的WebSocket连接，若`onerror`则自动重连。监听`onmessage`，收到的消息为服务端发来的控制命令：`send_text_message`、`add_member`等。
-
-### 定期把通讯录发送到服务端
-
-获取所有联系人(朋友、订阅号、群)，`deliveredContact`记录投递到服务端的联系人，`deliveredContact`记录同处一群的非直接联系人。
-
-每隔一段时间把未投递过的联系人发送到服务端。
-
-## Python服务端代码
-
-当前只有一个文件`wechatircd.py`，从miniircd抄了很多代码，后来自己又搬了好多RFC上的用不到的东西……
+## `wechatircd.py`
 
 ```
 .
@@ -176,24 +175,13 @@ Emoji在网页上呈现时为`<img class="emoji emoji1f604" text="_web" src="
 │   ├── RegisteredCommands   注册后可用命令
 ```
 
-## IRCv3
-
-支持IRC version 3.1和3.2的`server-time`，`wechatircd.py`传递消息时带上创建时刻，客户端显示消息创建时刻而不是收到消息的时刻。参见<http://ircv3.net/irc/>。IRCv3客户端支持参见<http://ircv3.net/software/clients.html>。
-
-WeeChat配置如下：
-```
-/set irc.server_default.capabilities "account-notify,away-notify,cap-notify,multi-prefix,server-time,znc.in/server-time-iso,znc.in/self-message"
-```
-
 ## FAQ
 
-### 使用这个方法的理由
+### 动机
 
-原本想研究微信网页版登录、收发消息的协议，自行实现客户端。参考过<https://github.com/0x5e/wechat-deleted-friends>，仿制了<https://gist.github.com/MaskRay/3b5b3fcbccfcba3b8f29>，可以登录。但根据minify后JS把相关部分重写非常困难，错误处理很麻烦，所以就让网页版JS自己来传递信息。
-
-### 用途
-
-可以使用强大的IRC客户端，方便记录日志(微信日志导出太麻烦<https://maskray.me/blog/2014-10-14-wechat-export>)，可以写bot。
+- 用IRC客户端代替移动端应用。参见[WeeChat操作各种聊天软件](https://maskray.me/blog/2016-08-13-weechat-rules-all).
+- Bot
+- 方便记录日志(微信日志导出太麻烦<https://maskray.me/blog/2014-10-14-wechat-export>)
 
 ## 微信数据获取及控制
 
@@ -230,9 +218,76 @@ angular.element('pre:last').scope().editAreaCtn = "Hello，微信";
 angular.element('pre:last').scope().sendTextMessage();
 ```
 
+### Linux下headless浏览器
+
+如果不能忍受每日扫码，可以在服务器上运行浏览器和wechatircd。
+
+- 创建一个新Chromium profile：`chromium --user-data-dir=$HOME/.config/chromium-wechatircd`，配置浏览器(`injector.js`用的证书, Tampermonkey, `injector.user.js`)，关闭浏览器
+- 安装xvfb (Arch Linux里叫`xorg-server-xvfb`)
+- `xvfb-run -n 99 chromium --user-data-dir=$HOME/.config/chromium-wechatircd https://wx.qq.com`
+- 等数秒待QR码加载。`DISPLAY=:99 import -window root /tmp/a.jpg && $your_image_viewer /tmp/a.jpg`，截图后用移动端应用扫码
+
+可以用VNC与浏览器交互：
+
+- `x11vnc -localhost -display :99`
+- 在另一个终端`vncviewer localhost`
+
+另一种方案是x2go，参见[无需每日扫码的IRC版微信和QQ：wechatircd、webqqircd](https://maskray.me/blog/2016-07-06-wechatircd-webqqircd-without-scanning-qrcode-daily).
+
+### Nick如何生成？
+
+移动端应用中，用户`显示群成员昵称`(`On-screen Names`)按如下顺序：
+- `设置备注和标签`(`Set Remark and Tag`)，如果设置过
+- `群昵称`(`My Alias in Group`, `Group Alias`)，如果设置过
+- Profile里性别标志旁的名字
+- `微信号`(`WeChat ID`)
+
+`batchgetcontact`和`webwxsync`等API提供的JSON使用了让人容易误解的字段名：
+
+`contactFactory#addContact`里的朋友：
+
+- `.Alias`: profile里的名字
+- `.NickName`: `WeChat ID`
+- `.RemarkName`: `Set Remark and Tag`
+
+`.MemberList`里的朋友/群友
+
+- `.DisplayName`: `My Alias in Group`
+- `.NickName`: profile里的名字，或`WeChat ID`
+
+一个用户的JSON可能被返回多次，上述字段都可能为空。用户的nick按照如下顺序查找第一个非空域：`.RemarkName`, `.NickName`, `.DisplayName`。如果一个群友和你在多个群里，你可能会在IRC客户端里看到`xx now known as yy`。
+
+## 已知问题
+
+DevTools console里可能有如下消息：
+
+```
+Uncaught TypeError: angular.extend is not a function
+    at Object.setUserInfo (index_0c7087d.js:4)
+    at index_0c7087d.js:2
+    at c (vendor_2de5d3a.js:11)
+    at vendor_2de5d3a.js:11
+    at c.$eval (vendor_2de5d3a.js:11)
+    at c.$digest (vendor_2de5d3a.js:11)
+    at c.$apply (vendor_2de5d3a.js:11)
+    at l (vendor_2de5d3a.js:11)
+    at m (vendor_2de5d3a.js:11)
+    at XMLHttpRequest.C.onreadystatechange (vendor_2de5d3a.js:11)
+```
+
+```
+Uncaught TypeError: angular.forEach is not a function
+```
+
+原因是`injector.js`得在`vendor_*.js`后`index_*.js`前执行。但TamperMonkey无法精细控制script的运行时机。
+
+### 网页与wx.qq.com断开连接后无法收发消息
+
+在这种情况下，网页与`wechatircd.py`的WebSocket连接应该断开，让用户知道他们需要刷新页面。
+
 ## 参考
 
-- [miniircd](https://github.com/jrosdahl/miniircd)
+- [miniircd](https://github.com/jrosdahl/miniircd)，抄了很多IRC协议相关代码
 - [RFC 2810: Internet Relay Chat: Architecture](https://tools.ietf.org/html/rfc2810)
 - [RFC 2811: Internet Relay Chat: Channel Management](https://tools.ietf.org/html/rfc2811)
 - [RFC 2812: Internet Relay Chat: Client Protocol](https://tools.ietf.org/html/rfc2812)
