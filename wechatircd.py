@@ -113,7 +113,10 @@ class Web(object):
 
     def close_connections(self):
         for ws in self.ws:
-            ws.send_str(json.dumps({'command': 'close'}))
+            try:
+                ws.send_str(json.dumps({'command': 'close'}))
+            except:
+                pass
 
     def send_file(self, receiver, filename, body):
         for ws in self.ws:
@@ -139,6 +142,7 @@ class Web(object):
                 }))
             except:
                 pass
+            break
 
     def add_friend(self, username, message):
         for ws in self.ws:

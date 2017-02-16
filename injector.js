@@ -3,6 +3,7 @@ const Common = {
   EMOJI_MAXIUM_SIZE: 120,
   WEBSOCKET_URL: 'wss://127.0.0.1:9000/ws',
   DEBUG: false,
+  SEND_TEXT_MESSAGE_TIMEOUT: 10,
 }
 
 const console2 = {
@@ -147,15 +148,23 @@ class CtrlServer {
         let old = chatFactory.getCurrentUserName()
         try {
           chatFactory.setCurrentUserName(data.receiver)
-          this.localID = (utilFactory.now() + Math.random().toFixed(3)).replace(".", "")
-          this.seenLocalID.add(this.localID)
+          let localID = this.localID = (utilFactory.now() + Math.random().toFixed(3)).replace(".", "")
+          this.seenLocalID.add(localID)
           if (data.message.startsWith('!html '))
-            editArea.editAreaCtn = data.message.substr(6)
+            data.message = data.message.substr(6)
           else if (data.message.startsWith('!m '))
-            editArea.editAreaCtn = data.message.substr(3).replace(/\\n/g, '\n').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            data.message = data.message.substr(3).replace(/\\n/g, '\n').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
           else
-            editArea.editAreaCtn = data.message.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            data.message = data.message.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          editArea.editAreaCtn = data.message
           editArea.sendTextMessage()
+          setTimeout(() => {
+            if (this.seenLocalID.has(localID))
+              this.send({command: 'send_text_message_nak',
+                receiver: data.receiver,
+                message: data.message
+              })
+          }, Common.SEND_TEXT_MESSAGE_TIMEOUT)
         } catch (ex) {
           this.send({command: 'web_debug', message: 'send text message exception: '  + ex.message + "\nstack: " + ex.stack})
           console2.error(ex.stack)
@@ -528,7 +537,7 @@ class Injector {
           try {
               // 服务端通过WebSocket控制网页版发送消息，无需投递到服务端
               if (window.ctrlServer.seenLocalID.has(e.LocalID))
-                  ;
+                  window.ctrlServer.seenLocalID.delete(e.LocalID)
               // 非服务端生成
               else {
                   let sender = contactFactory.getContact(e.MMActualSender)
