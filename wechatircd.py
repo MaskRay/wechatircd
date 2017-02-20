@@ -86,11 +86,14 @@ class Web(object):
                 try:
                     ws.pong()
                 except:
+                    info('WebSocket client ping')
                     break
             elif msg.tp == aiohttp.web.MsgType.close:
+                info('WebSocket client close')
                 break
         info('WebSocket client disconnected from %r', peername)
         server.on_websocket_close(peername)
+        self.ws.remove(ws)
         return ws
 
     def start(self, listens, port, loop):
@@ -579,7 +582,7 @@ class RegisteredCommands:
             return
         target = args[0]
         msg = args[1]
-        # on name conflict, prefer to resolve special user first
+        # on name conflict, prefer to resolve user first
         if server.has_nick(target):
             user = server.get_nick(target)
             if isinstance(user, Client):

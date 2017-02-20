@@ -1,4 +1,4 @@
-# wechatircd
+# wechatircd [![IRC](https://img.shields.io/badge/IRC-freenode-yellow.svg)](https://webchat.freenode.net/?channels=wechatircd) [![Telegram](https://img.shields.io/badge/chat-Telegram-blue.svg)](https://t.me/wechatircd) [![Gitter](https://img.shields.io/badge/chat-Gitter-753a88.svg)](https://gitter.im/wechatircd/wechatircd)
 
 wechatircd在wx.qq.com里注入JavaScript，用WebSocket与IRC server(`wechatircd.py`)通信，使得IRC客户端可以收发微信朋友、群消息、设置群名、邀请删除成员等。
 

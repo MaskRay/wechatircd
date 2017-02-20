@@ -570,25 +570,25 @@ class Injector {
                       content = `[位置] ${e.MMLocationDesc} ${e.MMLocationUrl}`
                   else if (e.MsgType == confFactory.MSGTYPE_IMAGE) // 3 图片
                       // e.getMsgImg
-                      content = '[图片] ' + 'https://wx.qq.com'+confFactory.API_webwxgetmsgimg + "?MsgID=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
+                      content = `[图片] https://${location.host}${confFactory.API_webwxgetmsgimg}?MsgID=${e.MsgId}&skey=${encodeURIComponent(accountFactory.getSkey())}`
                   else if (e.MsgType == confFactory.MSGTYPE_VOICE) // 34 语音
-                      content = '[语音] ' + 'https://wx.qq.com'+confFactory.API_webwxgetvoice + "?msgid=" + e.MsgId + "&skey=" + accountFactory.getSkey()
+                      content = `[语音] https://${location.host}${confFactory.API_webwxgetvoice}?MsgID=${e.MsgId}&skey=${encodeURIComponent(accountFactory.getSkey())}`
                   else if (e.MsgType == confFactory.MSGTYPE_VERIFYMSG) { // 37 新的朋友
                       let info = e.RecommendInfo
                       let gender = info.Sex == 1 ? '男' : info.Sex == 2 ? '女' : '未知'
-                      content = `[新的朋友] 昵称：${info.NickName} 性别：${gender} 省：${info.Province} 介绍：${info.Content} 头像：https://wx.qq.com${info.HeadImgUrl}`
+                      content = `[新的朋友] 昵称：${info.NickName} 性别：${gender} 省：${info.Province} 介绍：${info.Content} 头像：https://${location.host}${info.HeadImgUrl}`
                   }
                   else if (e.MsgType == confFactory.MSGTYPE_SHARECARD) { // 42 名片
                       let info = e.RecommendInfo
                       let gender = info.Sex == 1 ? '男' : info.Sex == 2 ? '女' : '未知'
-                      content = `[名片] 昵称：${info.NickName} 性别：${gender} 省：${info.Province} 头像：https://wx.qq.com${info.HeadImgUrl}`
+                      content = `[名片] 昵称：${info.NickName} 性别：${gender} 省：${info.Province} 头像：https://${location.host}${info.HeadImgUrl}`
                   }
                   else if (e.MsgType == confFactory.MSGTYPE_VIDEO) // 43 视频
                       // e.getMsgVideo
-                      content = '[视频] ' + 'https://wx.qq.com'+confFactory.API_webwxgetvideo + "?msgid=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
+                      content = `[视频] https://${location.host}${confFactory.API_webwxgetvideo}?MsgID=${e.MsgId}&skey=${encodeURIComponent(accountFactory.getSkey())}`
                   else if (e.MsgType == confFactory.MSGTYPE_EMOTICON) // 47 动画表情
                       // e.getMsgImg + HTML
-                      content = '[动画表情] ' + 'https://wx.qq.com'+confFactory.API_webwxgetmsgimg + "?MsgID=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
+                      content = `[动画表情] https://${location.host}${confFactory.API_webwxgetmsgimg}?MsgID=${e.MsgId}&skey=${encodeURIComponent(accountFactory.getSkey())}`
                   else if (e.MsgType == confFactory.MSGTYPE_LOCATION) // 48 位置 目前尚未实现
                       content = '[位置]'
                   else if (e.MsgType == confFactory.MSGTYPE_APP) { // 49
@@ -600,7 +600,7 @@ class Injector {
                       }
                   }
                   else if (e.MsgType == confFactory.MSGTYPE_MICROVIDEO) // 62 小视频
-                      content = '[小视频] ' + 'https://wx.qq.com'+confFactory.API_webwxgetvideo + "?msgid=" + e.MsgId + "&skey=" + encodeURIComponent(accountFactory.getSkey())
+                      content = `[小视频] https://${location.host}${confFactory.API_webwxgetvideo}?MsgID=${e.MsgId}&skey=${encodeURIComponent(accountFactory.getSkey())}`
                   else if (e.MsgType == confFactory.MSGTYPE_SYS) // 10000 系统，如：“您已添加了xxx，现在可以开始聊天了。”、“xx邀请了yy加入了群聊。”、“如需将文字消息的语言翻译成系统语言，可以长按消息后选择"翻译"”
                       content = '[系统] ' + content
                   else if (e.MsgType == confFactory.MSGTYPE_RECALLED) // 10002 撤回
