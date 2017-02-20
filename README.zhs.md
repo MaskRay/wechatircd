@@ -123,6 +123,7 @@ Emoji在网页上呈现时为`<img class="emoji emoji1f604" text="_web" src="
 
 ## 服务器选项
 
+- `--config`, short option `-c`，配置文件路径，参见[config](config)
 - Join mode，短选项`-j`
   + `--join auto`，默认：收到某个群第一条消息后自动加入，如果执行过`/part`命令了，则之后收到消息不会重新加入
   + `--join all`：加入所有channel
@@ -232,7 +233,7 @@ angular.element('pre:last').scope().sendTextMessage();
 - `x11vnc -localhost -display :99`
 - 在另一个终端`vncviewer localhost`
 
-另一种方案是x2go，参见[无需每日扫码的IRC版微信和QQ：wechatircd、webqqircd](https://maskray.me/blog/2016-07-06-wechatircd-webqqircd-without-scanning-qrcode-daily).
+另一种方案是x2go，参见[无需每日扫码的IRC版微信和QQ：wechatircd、webqqircd](https://maskray.me/blog/2016-07-06-wechatircd-webqqircd-without-scanning-qrcode-daily)。
 
 ### Nick如何生成？
 

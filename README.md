@@ -11,7 +11,7 @@ IRC client --- wechatircd.py --------- browser         ----- wx.qq.com
                                        injector.js
 ```
 
-Discuss wechatircd by joinging #wechatircd on freenode, or the [user group on Telegram](https://t.me/wechatircd).
+Discuss wechatircd by joining #wechatircd on freenode, or the [user group on Telegram](https://t.me/wechatircd).
 
 ## Installation
 
@@ -125,6 +125,7 @@ Emojis are rendered as `<img class="emoji emoji1f604" text="_web" src="/zh_CN
 
 ## Server options
 
+- `--config`, short option `-c`, config file path, see [config](config)
 - Join mode, short option `-j`
   + `--join auto`, default: join the channel upon receiving the first message, no rejoin after issuing `/part` and receiving messages later
   + `--join all`: join all the channels
@@ -151,6 +152,7 @@ Emojis are rendered as `<img class="emoji emoji1f604" text="_web" src="/zh_CN
   + `--logger-ignore '&test0' '&test1'`, list of ignored regex, do not log contacts/groups whose names partially match
   + `--logger-mask '/tmp/wechat/$channel/%Y-%m-%d.log'`, format of log filenames
   + `--logger-time-format %H:%M`, time format of entries of server side log
+- `--show-brand '&test0' '&test1'`, list of ignored regex, do not log contacts/groups whose names partially match
 
 See [wechatircd.service](wechatircd.service) for a template of `/etc/systemd/system/wechatircd.service`.
 

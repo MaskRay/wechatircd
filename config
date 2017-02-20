@@ -1,0 +1,32 @@
+# See https://pypi.python.org/pypi/ConfigArgParse for syntax
+
+# HTTP/WebSocket related options
+http-cert: /etc/wechatircd/cert.pem
+http-key: /etc/wechatircd/key.pem
+http-listen: [127.0.0.1, ::1]
+http-port: 9000
+# Specify http-root if injector.js is located elsewhere
+#http-root: /usr/share/wechatircd
+
+#ignore: [channel_name_regex0, channel_name_regex1]
+#ignore-topic: [group_name_regex0]
+# uncomment the next line if you do not want to receive messages from Subscription Accounts(BrandServ user)
+#ignore-brand
+
+# IRC related options
+#irc-cert: /etc/wechatircd/irc-cert.pem
+#irc-key: /etc/wechatircd/irc-key.pem
+irc-listen: [127.0.0.1, ::1]
+# reserved nicks for clients
+#irc-nicks: [ray]
+# IRC connection password
+#irc-password:
+irc-port: 6667
+
+# join mode
+join: new
+
+# logger
+#logger-ignore:
+#logger-mask: /tmp/wechatircd/$channel/%Y-%m-%d.log
+#logger-time-format: %H:%M

@@ -4,11 +4,9 @@ Documentation=https://github.com/MaskRay/wechatircd
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/wechatircd --http-cert /etc/wechatircd/cert.pem --http-key /etc/wechatircd/key.pem --http-root /usr/share/wechatircd
-#server side log, N.B. use '%%' in place of '%' to specify a single percent sign, see man 5 systemd.unit
-#ExecStart=/usr/bin/wechatircd --http-cert /etc/wechatircd/cert.pem --http-key /etc/wechatircd/key.pem --http-root /usr/share/wechatircd --logger-mask '/tmp/wechatircd/$channel/%%Y-%%m-%%d.log'
-#IRC over TLS + connection password
-#ExecStart=/usr/bin/wechatircd --http-cert /etc/wechatircd/cert.pem --http-key /etc/wechatircd/key.pem --http-root /usr/share/wechatircd --irc-cert /etc/wechatircd/irc-cert.pem --irc-key /etc/wechatircd/irc-key.pem --irc-password yourpassword
+User=nobody
+Group=nobody
+ExecStart=/usr/bin/wechatircd -c /etc/wechatircd/config
 
 [Install]
 WantedBy=multi-user.target

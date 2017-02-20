@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from argparse import ArgumentParser, Namespace
+from configargparse import ArgParser, Namespace
 #from ipdb import set_trace as bp
 from collections import deque
 from datetime import datetime, timezone
@@ -55,16 +55,23 @@ class Web(object):
         with open(os.path.join(options.http_root, 'index.html'), 'rb') as f:
             return aiohttp.web.Response(body=f.read())
 
-    async def handle_app_js(self, request):
-        with open(os.path.join(options.http_root, 'webwxapp.js'), 'rb') as f:
-            return aiohttp.web.Response(body=f.read(),
-                                headers={'Content-Type': 'application/javascript; charset=UTF-8',
-                                         'Access-Control-Allow-Origin': '*'})
+    async def handle_index_js(self, request):
+        try:
+            with open(os.path.join(options.http_root, 'index.js'), 'rb') as f:
+                return aiohttp.web.Response(body=f.read(),
+                    headers={'Content-Type': 'application/javascript; charset=UTF-8',
+                             'Access-Control-Allow-Origin': '*'})
+        except FileNotFoundError:
+            return aiohttp.web.Response(status=404, text='Not Found')
+
     async def handle_injector_js(self, request):
-        with open(os.path.join(options.http_root, 'injector.js'), 'rb') as f:
-            return aiohttp.web.Response(body=f.read(),
-                                headers={'Content-Type': 'application/javascript; charset=UTF-8',
-                                         'Access-Control-Allow-Origin': '*'})
+        try:
+            with open(os.path.join(options.http_root, 'injector.js'), 'rb') as f:
+                return aiohttp.web.Response(body=f.read(),
+                    headers={'Content-Type': 'application/javascript; charset=UTF-8',
+                             'Access-Control-Allow-Origin': '*'})
+        except FileNotFoundError:
+            return aiohttp.web.Response(status=404, text='Not Found. Wrong --http-root ?')
 
     async def handle_web_socket(self, request):
         ws = aiohttp.web.WebSocketResponse()
@@ -100,7 +107,7 @@ class Web(object):
         self.loop = loop
         self.app = aiohttp.web.Application()
         self.app.router.add_route('GET', '/', self.handle_index)
-        self.app.router.add_route('GET', '/webwxapp.js', self.handle_app_js)
+        self.app.router.add_route('GET', '/index.js', self.handle_index_js)
         self.app.router.add_route('GET', '/injector.js', self.handle_injector_js)
         self.app.router.add_route('GET', '/ws', self.handle_web_socket)
         self.handler = self.app.make_handler()
@@ -630,7 +637,11 @@ class SpecialCommands:
     def message(data):
         if data['id'] in web.id2message:
             return
-        sender = server.ensure_special_user(data['from'])
+        if data['from'] == 'BrandServ':
+            if options.ignore_brand: return
+            sender = BrandServ()
+        else:
+            sender = server.ensure_special_user(data['from'])
         sender_client_nick = data['client']
         if data.get('type') == 'room':
             to = server.ensure_special_room(data['to'])
@@ -1242,6 +1253,8 @@ class Client:
         self.writer = writer
         peer = writer.get_extra_info('socket').getpeername()
         self.host = peer[0]
+        if self.host[0] == ':':
+            self.host = '[{}]'.format(self.host)
         self.user = None
         self.nick = None
         self.registered = False
@@ -1531,6 +1544,19 @@ class Client:
             status.on_join(self)
 
 
+class BrandServ:
+    def __init__(self):
+        self.log_file = None
+
+    @property
+    def nick(self):
+        return BrandServ.__name__
+
+    @property
+    def prefix(self):
+        return '{}!{}@services.'.format(self.nick, self.nick)
+
+
 class SpecialUser:
     def __init__(self, record, friend):
         self.username = record['UserName']
@@ -1635,8 +1661,9 @@ class Server:
         self.name = 'wechatircd.maskray.me'
         self.nicks = {}
         self.clients = weakref.WeakSet()
+        self.log_file = None
         self._boot = datetime.now()
-        self.services = ('ChanServ',)
+        self.services = ('BrandServ', 'ChanServ',)
 
         self.username = ''
         self.name2special_room = {}      # name -> WeChat chatroom
@@ -1786,7 +1813,8 @@ class Server:
 
 
 def main():
-    ap = ArgumentParser(description='wechatircd brings wx.qq.com to IRC clients')
+    ap = ArgParser(description='wechatircd brings wx.qq.com to IRC clients')
+    ap.add('-c', '--config', is_config_file=True, help='config file path')
     ap.add_argument('-d', '--debug', action='store_true', help='run ipdb on uncaught exception')
     ap.add_argument('--dcc-send', type=int, default=10*1024*1024, help='size limit receiving from DCC SEND. 0: disable DCC SEND')
     ap.add_argument('--heartbeat', type=int, default=30, help='time to wait for IRC commands. The server will send PING and close the connection after another timeout of equal duration if no commands is received.')
@@ -1798,6 +1826,7 @@ def main():
     ap.add_argument('--http-root', default=os.path.dirname(__file__), help='HTTP root directory (serving injector.js)')
     ap.add_argument('-i', '--ignore', nargs='*',
                     help='list of ignored regex, do not auto join to a '+im_name+' chatroom whose channel name(generated from the Group Name) matches')
+    ap.add_argument('--ignore-brand', action='store_true', help='ignore messages from Subscription Accounts')
     ap.add_argument('-I', '--ignore-topic', nargs='*',
                     help='list of ignored regex, do not auto join to a '+im_name+' chatroom whose Group Name matches')
     ap.add_argument('--irc-cert', help='TLS certificate for IRC over TLS. You may concatenate certificate+key, specify a single PEM file and omit `--irc-key`. Use plain IRC if neither --irc-cert nor --irc-key is specified')
@@ -1820,6 +1849,7 @@ def main():
     ap.add_argument('-v', '--verbose', action='store_const', const=logging.DEBUG, dest='loglevel')
     global options
     options = ap.parse_args()
+    print(options)
     options.irc_nicks = [irc_lower(x) for x in options.irc_nicks]
 
     if sys.platform == 'linux':

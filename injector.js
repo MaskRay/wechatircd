@@ -592,10 +592,16 @@ class Injector {
                   else if (e.MsgType == confFactory.MSGTYPE_LOCATION) // 48 位置 目前尚未实现
                       content = '[位置]'
                   else if (e.MsgType == confFactory.MSGTYPE_APP) { // 49
-                      if (e.AppMsgType == confFactory.APPMSGTYPE_ATTACH) {
+                      if (e.AppMsgType === confFactory.APPMSGTYPE_ATTACH)
                           content = `[文件] filename: ${e.FileName} size: ${e.MMAppMsgFileSize} url: ${e.MMAppMsgDownloadUrl}`
-                      } else {
-                          let doms = $.parseHTML(content.replace(/&lt;?/g,'<').replace(/&gt;?/g,'>').replace(/&amp;?/g,'&'))
+                      else if (e.AppMsgType === confFactory.APPMSGTYPE_READER_TYPE) {
+                          let x = e.MMCategory[0]
+                          content = `[Reader] ${sender.NickName} ${x.title} ${x.url}`
+                      } else if (e.AppMsgType === confFactory.APPMSGTYPE_READER_TYPE)
+                          content = `[Url] ${utilFactory.htmlDecode(e.FileName)} ${utilFactory.htmlDecod(e.Url)}`
+                      else {
+                          console2.log('+AppMsgType', e.AppMsgType, e)
+                          let doms = $.parseHTML(utilFactory.htmlDecode(content))
                           content = '[App] ' + $('appmsg>title', doms).text() + ' ' + $('appmsg>url', doms).text()
                       }
                   }
@@ -609,7 +615,7 @@ class Injector {
                           id: e.MsgId,
                           type: e.MMIsChatRoom ? 'room' : undefined,
                           client: client,
-                          from: sender,
+                          from: sender.isBrandContact() ? 'BrandServ' : sender,
                           to: receiver,
                           text: content,
                           time: e.CreateTime
