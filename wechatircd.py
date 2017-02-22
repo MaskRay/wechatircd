@@ -652,10 +652,13 @@ class SpecialCommands:
         web.append_history(data)
 
         for line in data['text'].splitlines():
-            for client in server.auth_clients():
-                where = sender if to == server else to
-                irc_log(where, client if where == server else where, datetime.fromtimestamp(data['time']), client if sender == server else sender, line)
-                break
+            if to == server or sender == server:
+                client = server.preferred_client()
+                if client:
+                    where = sender if to == server else to
+                    irc_log(where, client if where == server else where, datetime.fromtimestamp(data['time']), client if sender == server else sender, line)
+            else:
+                irc_log(to, to, datetime.fromtimestamp(data['time']), sender, line)
             if isinstance(to, SpecialChannel):
                 for c in server.auth_clients():
                     if c not in to.joined and 'm' not in to.mode:
@@ -1175,7 +1178,6 @@ class SpecialChannel(Channel):
 
     def on_notice_or_privmsg(self, client, command, text):
         if not client.ctcp(self.username, command, text):
-            irc_log(self, self, datetime.now(), client, text)
             text = process_text(self, text)
             web.append_history({'id': uuid.uuid1().hex, 'time': int(time.time()),
                 'from': server, 'to': self.username, 'text': text})
@@ -1628,7 +1630,6 @@ class SpecialUser:
 
     def on_notice_or_privmsg(self, client, command, text):
         if not client.ctcp(self.username, command, text):
-            irc_log(self, self, datetime.now(), client, text)
             text = process_text(self, text)
             web.append_history({'id': uuid.uuid1().hex, 'time': int(time.time()),
                 'from': server, 'to': self.username, 'text': text})
@@ -1684,7 +1685,20 @@ class Server:
             traceback.print_exc()
 
     def auth_clients(self):
-        return (client for client in self.clients if client.nick)
+        return (c for c in self.clients if c.nick)
+
+    def preferred_client(self):
+        n = len(self.clients)
+        opt, optv = None, n+2
+        for c in self.clients:
+            if c.nick:
+                try:
+                    v = options.irc_nicks.index(c.nick)
+                except ValueError:
+                    v = n+1 if c.nick.endswith('bot') else n
+                if v < optv:
+                    opt, optv = c, v
+        return opt
 
     def has_channel(self, name):
         x = irc_lower(name)
