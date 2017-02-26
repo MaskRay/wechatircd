@@ -252,11 +252,13 @@ def process_text(to, text):
             cont = True
             text = text[match.end():]
             which = int(match.group(1))
+            in_channel = isinstance(to, SpecialChannel)
             if which > 0:
                 for msg in reversed(web.recent_messages):
-                    if msg['to'] == to.username:
-                        which -= 1
-                        if which == 0:
+                    if in_channel and msg['to'] == to.username and msg['from'] != server or \
+                            not in_channel and msg['from'] == to and msg['to'] == server.username:
+                        which -= len(msg['text'].splitlines())
+                        if which <= 0:
                             reply = msg
                             break
         if text.startswith('!m '):
@@ -316,6 +318,27 @@ def irc_log(where, peer, local_time, sender, line):
         time_str, sender.nick,
         re.sub(r'\x03\d+(,\d+)?|[\x02\x0f\x1d\x1f\x16]', '', line)))
     where.log_file.flush()
+
+
+def irc_privmsg(client, command, to, text):
+    if command == 'PRIVMSG' and client.ctcp(to, text):
+        return
+
+    def send():
+        web.send_text_message(client, to.username, to.privmsg_text)
+        to.privmsg_text = ''
+
+    async def wait(seq):
+        await asyncio.sleep(options.paste_wait)
+        if to.privmsg_seq == seq:
+            send()
+
+    text = process_text(to, text)
+    to.privmsg_seq = to.privmsg_seq+1
+    if len(to.privmsg_text):
+        to.privmsg_text += '\n'
+    to.privmsg_text += text
+    server.loop.create_task(wait(to.privmsg_seq))
 
 ### Commands
 
@@ -1043,6 +1066,8 @@ class SpecialChannel(Channel):
         # If the owner is determined, he/she is the only op
         self.update(record)
         self.log_file = None
+        self.privmsg_seq = 0
+        self.privmsg_text = ''
 
     def __repr__(self):
         return repr({k: v for k, v in self.__dict__.items()
@@ -1177,11 +1202,7 @@ class SpecialChannel(Channel):
         client.reply('366 {} {} :End of NAMES list', client.nick, self.name)
 
     def on_notice_or_privmsg(self, client, command, text):
-        if not client.ctcp(self.username, command, text):
-            text = process_text(self, text)
-            web.append_history({'id': uuid.uuid1().hex, 'time': int(time.time()),
-                'from': server, 'to': self.username, 'text': text})
-            web.send_text_message(client, self.username, text)
+        irc_privmsg(client, command, self, text)
 
     def on_invite(self, client, nick):
         if server.has_special_user(nick):
@@ -1472,7 +1493,7 @@ class Client:
                 traceback.print_exc()
                 self.disconnect('client error')
 
-    def ctcp(self, peer, command, msg):
+    def ctcp(self, peer, msg):
         async def download():
             reader, writer = await asyncio.open_connection(ip, port)
             body = b''
@@ -1484,7 +1505,7 @@ class Client:
                 body += buf
                 if len(body) >= size:
                     break
-            web.send_file(peer, filename, body)
+            web.send_file(peer.username, filename, body)
 
         async def download_wrap():
             try:
@@ -1492,7 +1513,7 @@ class Client:
             except asyncio.TimeoutError:
                 self.status('Downloading of DCC SEND timeout')
 
-        if command == 'PRIVMSG' and len(msg) > 2 and msg[0] == '\1' and msg[-1] == '\1':
+        if len(msg) > 2 and msg[0] == '\1' and msg[-1] == '\1':
             # VULNERABILITY used as proxy
             try:
                 dcc_, send_, filename, ip, port, size = msg[1:-1].split(' ')
@@ -1568,6 +1589,8 @@ class SpecialUser:
         self.uin = 0
         self.update(record, friend)
         self.log_file = None
+        self.privmsg_seq = 0
+        self.privmsg_text = ''
 
     @property
     def prefix(self):
@@ -1629,11 +1652,7 @@ class SpecialUser:
         del self.channel2nick[channel]
 
     def on_notice_or_privmsg(self, client, command, text):
-        if not client.ctcp(self.username, command, text):
-            text = process_text(self, text)
-            web.append_history({'id': uuid.uuid1().hex, 'time': int(time.time()),
-                'from': server, 'to': self.username, 'text': text})
-            web.send_text_message(client, self.username, text)
+        irc_privmsg(client, command, self, text)
 
     def on_who_member(self, client, channel):
         if channel in self.channel2nick:
@@ -1859,11 +1878,11 @@ def main():
     ap.add_argument('--logger-ignore', nargs='*', help='list of ignored regex, do not log contacts/chatrooms whose names match')
     ap.add_argument('--logger-mask', help='WeeChat logger.mask.irc')
     ap.add_argument('--logger-time-format', default='%H:%M', help='WeeChat logger.file.time_format')
+    ap.add_argument('--paste-wait', type=float, default=0.1, help='lines will be hold for up to $paste_wait seconds before sending, lines in this interval will be packed to a multiline message')
     ap.add_argument('-q', '--quiet', action='store_const', const=logging.WARN, dest='loglevel')
     ap.add_argument('-v', '--verbose', action='store_const', const=logging.DEBUG, dest='loglevel')
     global options
     options = ap.parse_args()
-    print(options)
     options.irc_nicks = [irc_lower(x) for x in options.irc_nicks]
 
     if sys.platform == 'linux':

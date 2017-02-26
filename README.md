@@ -79,9 +79,15 @@ The server can only be bound to one wx.qq.com account, however, you may have mor
 - `nick0: nick1: test` will be converted to `@GroupAlias0 @GroupAlias1 test`, where `GroupAlias0` is `My Alias in Group`/`Name` in profile/`WeChat ID` set by that user. It corresponds to `On-screen names` in the mobile application.
 - Reply to the message at 12:34:SS: `@1234 !m multi\nline\nreply`, which will be sent as `「Re GroupAlias: text」text`
 - Reply to the message at 12:34:56: `!m @123456 multi\nline\nreply`
-- Reply to the penultimate message in this channel/chat: `@2 reply`
+- Reply to the penultimate message (your own messages are not counted) in this channel/chat: `@2 reply`
+- Paste detection. Lines will be hold for up to 0.1 seconds before sending, lines in this interval will be packed to a multiline message
 
 `!m `, `@3 `, `nick: ` can be arranged in any order.
+
+For WeeChat, its anti-flood mechanism will prevent two user messages sent to IRC server in the same time. Disable anti-flood to enable paste detection.
+```
+/set irc.server.wechat.anti_flood_prio_high 0
+```
 
 `server-time` extension from IRC version 3.1, 3.2. `wechatircd.py` includes the timestamp (obtained from JavaScript) in messages to tell IRC clients that the message happened at the given time. See <http://ircv3.net/irc/>. See<http://ircv3.net/software/clients.html> for Client support of IRCv3.
 
@@ -126,21 +132,16 @@ Emojis are rendered as `<img class="emoji emoji1f604" text="_web" src="/zh_CN
 ## Server options
 
 - `--config`, short option `-c`, config file path, see [config](config)
-- Join mode, short option `-j`
-  + `--join auto`, default: join the channel upon receiving the first message, no rejoin after issuing `/part` and receiving messages later
-  + `--join all`: join all the channels
-  + `--join manual`: no automatic join
-  + `--join new`: like `auto`, but rejoin when new messages arrive even if after `/part`
-- Groups that should not join automatically. This feature supplements join mode.
-  + `--ignore 'fo[o]' bar`, do not auto join channels whose names(generated from Group Name) partially match regex `fo[o]` or `bar`
-  + `--ignore-display-name 'fo[o]' bar`, short option `-I`, do not auto join channels whose Group Name partially match regex `fo[o]` or `bar`
 - HTTP/WebSocket related options
   + `--http-cert cert.pem`, TLS certificate for HTTPS/WebSocket. You may concatenate certificate+key, specify a single PEM file and omit `--http-key`. Use HTTP if neither `--http-cert` nor `--http-key` is specified.
   + `--http-key key.pem`, TLS key for HTTPS/WebSocket
   + `--http-listen 127.1 ::1`, change HTTPS/WebSocket listen address to `127.1` and `::1`, overriding `--listen`
   + `--http-port 9000`, change HTTPS/WebSocket listen port to 9000
   + `--http-root .`, the root directory to serve `injector.js`
-- `--listen 127.0.0.1`, short option `-l`, change IRC/HTTP/WebSocket listen address to `127.0.0.1`.
+- Groups that should not join automatically. This feature supplements join mode.
+  + `--ignore '&fo[o]' '&bar'`, do not auto join channels whose names(generated from Group Name) partially match regex `&fo[o]` or `&bar`
+  + `--ignore-display-name 'fo[o]' bar`, short option `-I`, do not auto join channels whose Group Name partially match regex `fo[o]` or `bar`
+- `--ignore-brand`, ignore messages from subscription accounts (`MM_USERATTRVERIFYFALG_BIZ_BRAND`)
 - IRC related options
   + `--irc-cert cert.pem`, TLS certificate for IRC over TLS. You may concatenate certificate+key, specify a single PEM file and omit `--irc-key`. Use plain IRC if neither --irc-cert nor --irc-key is specified.
   + `--irc-key key.pem`, TLS key for IRC over TLS.
@@ -148,11 +149,17 @@ Emojis are rendered as `<img class="emoji emoji1f604" text="_web" src="/zh_CN
   + `--irc-nicks ray ray1`, reverved nicks for clients. `SpecialUser` will not have these nicks.
   + `--irc-password pass`, set the connection password to `pass`.
   + `--irc-port 6667`, IRC server listen port.
+- Join mode, short option `-j`
+  + `--join auto`, default: join the channel upon receiving the first message, no rejoin after issuing `/part` and receiving messages later
+  + `--join all`: join all the channels
+  + `--join manual`: no automatic join
+  + `--join new`: like `auto`, but rejoin when new messages arrive even if after `/part`
+- `--listen 127.0.0.1`, short option `-l`, change IRC/HTTP/WebSocket listen address to `127.0.0.1`.
 - Server side log
   + `--logger-ignore '&test0' '&test1'`, list of ignored regex, do not log contacts/groups whose names partially match
   + `--logger-mask '/tmp/wechat/$channel/%Y-%m-%d.log'`, format of log filenames
   + `--logger-time-format %H:%M`, time format of entries of server side log
-- `--show-brand '&test0' '&test1'`, list of ignored regex, do not log contacts/groups whose names partially match
+- `--paste-wait 0.1`, lines will be hold for up to 0.1 seconds before sending, lines in this interval will be packed to a multiline message
 
 See [wechatircd.service](wechatircd.service) for a template of `/etc/systemd/system/wechatircd.service`.
 

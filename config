@@ -1,6 +1,7 @@
 # See https://pypi.python.org/pypi/ConfigArgParse for syntax
 
 # HTTP/WebSocket related options
+# Use HTTPS to server injector.js and injector.user.js if at least one of http-cert or http-key is specified
 http-cert: /etc/wechatircd/cert.pem
 http-key: /etc/wechatircd/key.pem
 http-listen: [127.0.0.1, ::1]
@@ -14,6 +15,7 @@ http-port: 9000
 #ignore-brand
 
 # IRC related options
+# Use IRC over TLS if at least one of irc-cert or irc-key is specified
 #irc-cert: /etc/wechatircd/irc-cert.pem
 #irc-key: /etc/wechatircd/irc-key.pem
 irc-listen: [127.0.0.1, ::1]

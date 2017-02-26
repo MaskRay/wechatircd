@@ -77,9 +77,15 @@ HTTPS、WebSocket over TLS默认用9000端口，使用其他端口需要修改us
 - `nick0: nick1: test`会被转换成`@GroupAlias0 @GroupAlias1 test`，`GroupAlias0` 是那个用户自己设置的名字，不是你设置的`Set Remark and Tag`，对应移动端的`On-screen names`
 - 回复12:34:SS的消息：`@1234 !m multi\nline\nreply`，会发送`「Re GroupAlias: text」text`
 - 回复12:34:56的消息：`!m @123456 multi\nline\nreply`
-- 回复朋友/群的倒数第二条消息：`@2 reply`
+- 回复朋友/群的倒数第二条消息(自己的消息不计数)：`@2 reply`
+- 粘贴检测。待发送消息延迟0.1秒发送，期间收到的所有行合并为一个多行消息发送
 
 `!m `, `@3 `, `nick: `可以任意安排顺序。
+
+对于WeeChat，默认的anti-flood机制会让发出去的两条消息间隔至少2秒。禁用该机制使粘贴检测生效：
+```
+/set irc.server.wechat.anti_flood_prio_high 0
+```
 
 若客户端启用IRC 3.1 3.2的`server-time`扩展，`wechatircd.py`会在发送的消息中包含 网页版获取的时间戳。客户端显示消息时时间就会和服务器收到的消息的时刻一致。参见<http://ircv3.net/irc/>。参见<http://ircv3.net/software/clients.html>查看IRCv3的客户端支持情况。
 
@@ -124,21 +130,16 @@ Emoji在网页上呈现时为`<img class="emoji emoji1f604" text="_web" src="
 ## 服务器选项
 
 - `--config`, short option `-c`，配置文件路径，参见[config](config)
-- Join mode，短选项`-j`
-  + `--join auto`，默认：收到某个群第一条消息后自动加入，如果执行过`/part`命令了，则之后收到消息不会重新加入
-  + `--join all`：加入所有channel
-  + `--join manual`：不自动加入
-  + `--join new`：类似于`auto`，但执行`/part`命令后，之后收到消息仍自动加入
-- 指定不自动加入的群名，用于补充join mode
-  + `--ignore 'fo[o]' bar`，channel名部分匹配正则表达式`fo[o]`或`bar`
-  + `--ignore-topic 'fo[o]' bar`, 群标题部分匹配正则表达式`fo[o]`或`bar`
 - HTTP/WebSocket相关选项
   + `--http-cert cert.pem`，HTTPS/WebSocketTLS的证书。你可以把证书和私钥合并为一个文件，省略`--http-key`选项。如果`--http-cert`和`--http-key`均未指定，使用不加密的HTTP
   + `--http-key key.pem`，HTTPS/WebSocket的私钥
   + `--http-listen 127.1 ::1`，HTTPS/WebSocket监听地址设置为`127.1`和`::1`，overriding `--listen`
   + `--http-port 9000`，HTTPS/WebSocket监听端口设置为9000
   + `--http-root .`, 存放`injector.js`的根目录
-- `-l 127.0.0.1`，IRC/HTTP/WebSocket监听地址设置为`127.0.0.1`
+- 指定不自动加入的群名，用于补充join mode
+  + `--ignore 'fo[o]' bar`，channel名部分匹配正则表达式`fo[o]`或`bar`
+  + `--ignore-topic 'fo[o]' bar`, 群标题部分匹配正则表达式`fo[o]`或`bar`
+- `--ignore-brand`，忽略来自订阅号的消息(`MM_USERATTRVERIFYFALG_BIZ_BRAND`)
 - IRC相关选项
   + `--irc-cert cert.pem`，IRC over TLS的证书。你可以把证书和私钥合并为一个文件，省略`--irc-key`选项。如果`--irc-cert`和`--irc-key`均未指定，使用不加密的IRC
   + `--irc-key key.pem`，IRC over TLS的私钥
@@ -146,10 +147,17 @@ Emoji在网页上呈现时为`<img class="emoji emoji1f604" text="_web" src="
   + `--irc-nicks ray ray1`，给客户端保留的nick。`SpecialUser`不会占用这些名字
   + `--irc-password pass`，IRC connection password设置为`pass`
   + `--irc-port 6667`，IRC监听端口
+- Join mode，短选项`-j`
+  + `--join auto`，默认：收到某个群第一条消息后自动加入，如果执行过`/part`命令了，则之后收到消息不会重新加入
+  + `--join all`：加入所有channel
+  + `--join manual`：不自动加入
+  + `--join new`：类似于`auto`，但执行`/part`命令后，之后收到消息仍自动加入
+- `--listen 127.0.0.1`，`-l`，IRC/HTTP/WebSocket监听地址设置为`127.0.0.1`
 - 服务端日志
   + `--logger-ignore '&test0' '&test1'`，不记录部分匹配指定正则表达式的朋友/群日志
   + `--logger-mask '/tmp/wechat/$channel/%Y-%m-%d.log'`，日志文件名格式
   + `--logger-time-format %H:%M`，日志单条消息的时间格式
+- `--paste-wait`，待发送消息延迟0.1秒发送，期间收到的所有行合并为一个多行消息发送
 
 ## JS改动
 
