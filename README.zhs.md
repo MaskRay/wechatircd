@@ -159,6 +159,8 @@ Emoji在网页上呈现时为`<img class="emoji emoji1f604" text="_web" src="
   + `--logger-time-format %H:%M`，日志单条消息的时间格式
 - `--paste-wait`，待发送消息延迟0.1秒发送，期间收到的所有行合并为一个多行消息发送
 
+[wechatircd.service](wechatircd.service)是`/etc/systemd/system/wechatircd.service`的模板，修改其中的`User=` and `Group=`。
+
 ## JS改动
 
 - 创建到服务端的WebSocket连接，自动重连
