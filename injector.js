@@ -1,7 +1,7 @@
 'use strict'
 const Common = {
   EMOJI_MAXIUM_SIZE: 120,
-  WEBSOCKET_URL: 'wss://127.0.0.1:9000/ws',
+  WEBSOCKET_URL: '@WEBSOCKET_URL',
   DEBUG: false,
   SEND_TEXT_MESSAGE_TIMEOUT: 5,
 }

@@ -10,6 +10,13 @@ IRC client --- wechatircd.py --------- browser         ----- wx.qq.com
 ```
 
 加入freenode的#wechatircd频道，或[Telegram group](https://t.me/wechatircd)。
+[WeeChat中使用微信的视频](https://asciinema.org/a/636dkay05bpzci1idf3e84y1y)
+
+## 安装
+
+- [Arch Linux](#arch-linux) or [Not Arch Linux](#not-arch-linux)
+- [Userscript和自签名证书](#userscript和自签名证书)
+- [使用](#使用)
 
 ### Arch Linux
 
@@ -28,7 +35,7 @@ set irc.server.wechat.ssl_verify off
 set irc.server.wechat.password yourpassword
 ```
 
-### 其他发行版
+### Not Arch Linux
 
 - python >= 3.5
 - `pip install -r requirements.txt`
@@ -41,7 +48,7 @@ set irc.server.wechat.password yourpassword
 Chrome/Chromium
 
 - 访问`chrome://settings/certificates`，导入`cert.pem`，在Authorities标签页选择该证书，Edit->Trust this certificate for identifying websites.
-- 安装Tampermonkey扩展，点击<https://github.com/MaskRay/wechatircd/raw/master/injector.user.js>安装userscript，效果是在<https://wx.qq.com>页面注入<https://127.0.0.1:9000/injector.js>
+- 安装Tampermonkey扩展，点击<https://github.com/MaskRay/wechatircd/raw/master/injector.user.js>安装userscript，效果是在<https://wx.qq.com>页面注入<https://127.0.0.1:9000/injector.js>。如果监听不同地址，需要修改`127.0.0.1:9000`
 
 Firefox
 
@@ -50,7 +57,12 @@ Firefox
 
 ![](https://maskray.me/static/2016-02-21-wechatircd/meow.jpg)
 
-HTTPS、WebSocket over TLS默认用9000端口，使用其他端口需要修改userscript，启动`wechatircd.py`时用`--web-port 10000`指定其他端口。
+默认`injector.js`和WebSocket在127.0.0.1:9000，可以用`--http-listen 0.0.0.0 --http-port 9000`。
+
+两种方式启用HTTPS：
+
+- `--http-cert cert.pem --http-key key.pem`，让wechatircd使用HTTPS
+- 去除`--http-cert --http-key`，让wechatircd使用HTTP，用带HTTPS的Nginx作为反向代理。需要把`Host:`传递给wechatircd(`proxy_set_header Host $http_host;`)，因为wechatircd根据浏览器的`Host:`修改`injector.js`中定义的WebSocket URL
 
 ## 使用
 

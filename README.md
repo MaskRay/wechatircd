@@ -12,8 +12,13 @@ IRC client --- wechatircd.py --------- browser         ----- wx.qq.com
 ```
 
 Discuss wechatircd by joining #wechatircd on freenode, or the [user group on Telegram](https://t.me/wechatircd).
+[Video on using WeChat in WeeChat](https://asciinema.org/a/636dkay05bpzci1idf3e84y1y)
 
 ## Installation
+
+- [Arch Linux](#arch-linux) or [Not Arch Linux](#not-arch-linux)
+- [Userscript and self-signed certificate](#userscript-and-self-signed-certificate)
+- [Usage](#usage)
 
 ### Arch Linux
 
@@ -38,12 +43,12 @@ set irc.server.wechat.password yourpassword
 - Import `cert.pem` to the browser.
 - `./wechatircd.py --http-cert cert.pem --http-key key.pem`
 
-### Userscript and self-signed certificate
+## Userscript and self-signed certificate
 
 Chrome/Chromium
 
 - Visit `chrome://settings/certificates`，import `cert.pem`，click the `Authorities` tab，select the `127.0.0.1` certificate, Edit->Trust this certificate for identifying websites.
-- Install extension Tampermonkey, install <https://github.com/MaskRay/wechatircd/raw/master/injector.user.js>. It will inject <https://127.0.0.1:9000/injector.js> to <https://wx.qq.com>.
+- Install extension Tampermonkey, install <https://github.com/MaskRay/wechatircd/raw/master/injector.user.js>. It will inject <https://127.0.0.1:9000/injector.js> to <https://wx.qq.com>. You need to change `127.0.0.1:9000` if you want wechatircd to listen on another address.
 
 Firefox
 
@@ -52,7 +57,12 @@ Firefox
 
 ![](https://maskray.me/static/2016-02-21-wechatircd/meow.jpg)
 
-The server serves `injector.js` and WebSocket connections on 127.0.0.1:9000 by default, which can be overriden with the `--http-port 9000` option. You need to change the userscript to use an alternative port.
+The server serves `injector.js` and WebSocket connections on 127.0.0.1:9000 by default, which can be overriden with `--http-listen 0.0.0.0 --http-port 9000`.
+
+You can enable HTTPS in two ways:
+
+- `--http-cert cert.pem --http-key key.pem` to make wechatircd serve HTTPS
+- Omit `--http-cert --http-key` to make wechatircd serve HTTP, and use Nginx (with HTTPS enabled) as a reverse proxy. In this case, you need to pass `Host:` to wechatircd (`proxy_set_header Host $http_host;`) as it changes the WebSocket URL defined in `injector.js` according to `Host:` specified by the browser.
 
 ## Usage
 

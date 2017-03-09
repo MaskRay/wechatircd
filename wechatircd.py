@@ -68,11 +68,14 @@ class Web(object):
     async def handle_injector_js(self, request):
         try:
             with open(os.path.join(options.http_root, 'injector.js'), 'rb') as f:
-                return aiohttp.web.Response(body=f.read(),
+                return aiohttp.web.Response(
+                    body=f.read().replace(b'@WEBSOCKET_URL', 'wss://{}/ws'.format(request.headers['Host']).encode()),
                     headers={'Content-Type': 'application/javascript; charset=UTF-8',
                              'Access-Control-Allow-Origin': '*'})
         except FileNotFoundError:
             return aiohttp.web.Response(status=404, text='Not Found. Wrong --http-root ?')
+        except KeyError:
+            return aiohttp.web.Response(status=400, text='Missing Host:')
 
     async def handle_web_socket(self, request):
         ws = aiohttp.web.WebSocketResponse()
