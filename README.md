@@ -39,7 +39,7 @@ set irc.server.wechat.password yourpassword
 
 - python >= 3.5
 - `pip install -r requirements.txt`
-- Generate a self-signed private key/certificate pair with `openssl req -newkey rsa:2048 -nodes -keyout key.pem -x509 -out cert.pem -subj '/CN=127.0.0.1' -dates 9999`.
+- Generate a self-signed private key/certificate pair with `openssl req -newkey rsa:2048 -nodes -keyout key.pem -x509 -out cert.pem -subj '/CN=127.0.0.1' -days 9999`.
 - Import `cert.pem` to the browser.
 - `./wechatircd.py --http-cert cert.pem --http-key key.pem`
 
@@ -91,6 +91,7 @@ The server can only be bound to one wx.qq.com account, however, you may have mor
 - Reply to the message at 12:34:56: `!m @123456 multi\nline\nreply`
 - Reply to the penultimate message (your own messages are not counted) in this channel/chat: `@2 reply`
 - Paste detection. Lines will be hold for up to 0.1 seconds before sending, lines in this interval will be packed to a multiline message
+- `--http-url https://127.0.0.1:9000` if you want to shorten media URLs to something like `https://127.0.0.1:9000/media/0`
 
 `!m `, `@3 `, `nick: ` can be arranged in any order.
 
@@ -148,6 +149,7 @@ Emojis are rendered as `<img class="emoji emoji1f604" text="_web" src="/zh_CN
   + `--http-listen 127.1 ::1`, change HTTPS/WebSocket listen address to `127.1` and `::1`, overriding `--listen`
   + `--http-port 9000`, change HTTPS/WebSocket listen port to 9000
   + `--http-root .`, the root directory to serve `injector.js`
+  + `--http-url https://127.0.0.1:9000`, if specified, display media links as https://127.0.0.1:9000/document/$id ; if not, `https://wx.qq.com/cgi-bin/...`
 - Groups that should not join automatically. This feature supplements join mode.
   + `--ignore '&fo[o]' '&bar'`, do not auto join channels whose names(generated from Group Name) partially match regex `&fo[o]` or `&bar`
   + `--ignore-display-name 'fo[o]' bar`, short option `-I`, do not auto join channels whose Group Name partially match regex `fo[o]` or `bar`
@@ -170,6 +172,7 @@ Emojis are rendered as `<img class="emoji emoji1f604" text="_web" src="/zh_CN
   + `--logger-mask '/tmp/wechat/$channel/%Y-%m-%d.log'`, format of log filenames
   + `--logger-time-format %H:%M`, time format of entries of server side log
 - `--paste-wait 0.1`, lines will be hold for up to 0.1 seconds before sending, lines in this interval will be packed to a multiline message
+- `--special-channel-prefix`, choices: `&`, `!`, `#`, `##`, prefix for SpecialChannel. [Quassel](quassel-irc.org) does not seem to support channels with prefixes `&`, `--special-channel-prefix '##'` to make Quassel happy
 
 See [wechatircd.service](wechatircd.service) for a template of `/etc/systemd/system/wechatircd.service`.
 

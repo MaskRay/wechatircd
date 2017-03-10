@@ -67,6 +67,21 @@ class CtrlServer {
           this.send({command: 'add_friend_nak', user: data.user})
         })
         break
+      case 'download':
+        fetch(data['url'], {credentials: 'include'}).then(res => {
+          if (! res.ok)
+            throw Error(res.statusText)
+          return res.blob()
+        }).then(blob => {
+          let reader = new FileReader
+          reader.onload = () => {
+            this.send({command: 'download_ack', seq: data['seq'],
+              body: reader.result === 'data:' ? '' : reader.result.replace(/.*?,/, ''),
+              type: blob.type})
+          }
+          reader.readAsDataURL(blob)
+        }).catch(err => this.send({command: 'download_nak', seq: data['seq'], error: err.message}))
+        break
       case 'logout':
         angular.element($('.panel')[0]).scope().toggleSystemMenu()
         $('#mmpop_system_menu a[title="Log Out"]').click()
@@ -556,7 +571,7 @@ class Injector {
               let sender = contactFactory.getContact(e.MMActualSender)
               let receiver = contactFactory.getContact(e.MMIsChatRoom ? e.MMPeerUserName : e.ToUserName)
               // 某个IRC client通过WebSocket控制网页版发送消息，无需投递到该client
-              let client = ''
+              let client = '', media
               if (window.ctrlServer.seenLocalID.has(e.LocalID)) {
                   client = window.ctrlServer.seenLocalID.get(e.LocalID)
                   window.ctrlServer.seenLocalID.delete(e.LocalID)
@@ -568,12 +583,14 @@ class Injector {
                   delete receiver.MemberList
                   if (e.MMLocationUrl)
                       content = `[位置] ${e.MMLocationDesc} ${e.MMLocationUrl}`
-                  else if (e.MsgType == confFactory.MSGTYPE_IMAGE) // 3 图片
+                  else if (e.MsgType == confFactory.MSGTYPE_IMAGE) { // 3 图片
                       // e.getMsgImg
-                      content = `[图片] https://${location.host}${confFactory.API_webwxgetmsgimg}?MsgID=${e.MsgId}&skey=${encodeURIComponent(accountFactory.getSkey())}`
-                  else if (e.MsgType == confFactory.MSGTYPE_VOICE) // 34 语音
-                      content = `[语音] https://${location.host}${confFactory.API_webwxgetvoice}?MsgID=${e.MsgId}&skey=${encodeURIComponent(accountFactory.getSkey())}`
-                  else if (e.MsgType == confFactory.MSGTYPE_VERIFYMSG) { // 37 新的朋友
+                      content = `https://${location.host}${confFactory.API_webwxgetmsgimg}?MsgID=${e.MsgId}&skey=${encodeURIComponent(accountFactory.getSkey())}`
+                      media = '图片'
+                  } else if (e.MsgType == confFactory.MSGTYPE_VOICE) { // 34 语音
+                      content = `https://${location.host}${confFactory.API_webwxgetvoice}?MsgID=${e.MsgId}&skey=${encodeURIComponent(accountFactory.getSkey())}`
+                      media = '语音'
+                  } else if (e.MsgType == confFactory.MSGTYPE_VERIFYMSG) { // 37 新的朋友
                       let info = e.RecommendInfo
                       let gender = info.Sex == 1 ? '男' : info.Sex == 2 ? '女' : '未知'
                       content = `[新的朋友] 昵称：${info.NickName} 性别：${gender} 省：${info.Province} 介绍：${info.Content} 头像：https://${location.host}${info.HeadImgUrl}`
@@ -583,13 +600,15 @@ class Injector {
                       let gender = info.Sex == 1 ? '男' : info.Sex == 2 ? '女' : '未知'
                       content = `[名片] 昵称：${info.NickName} 性别：${gender} 省：${info.Province} 头像：https://${location.host}${info.HeadImgUrl}`
                   }
-                  else if (e.MsgType == confFactory.MSGTYPE_VIDEO) // 43 视频
+                  else if (e.MsgType == confFactory.MSGTYPE_VIDEO) { // 43 视频
                       // e.getMsgVideo
-                      content = `[视频] https://${location.host}${confFactory.API_webwxgetvideo}?MsgID=${e.MsgId}&skey=${encodeURIComponent(accountFactory.getSkey())}`
-                  else if (e.MsgType == confFactory.MSGTYPE_EMOTICON) // 47 动画表情
+                      content = `https://${location.host}${confFactory.API_webwxgetvideo}?MsgID=${e.MsgId}&skey=${encodeURIComponent(accountFactory.getSkey())}`
+                      media = '视频'
+                  } else if (e.MsgType == confFactory.MSGTYPE_EMOTICON) { // 47 动画表情
                       // e.getMsgImg + HTML
-                      content = `[动画表情] https://${location.host}${confFactory.API_webwxgetmsgimg}?MsgID=${e.MsgId}&skey=${encodeURIComponent(accountFactory.getSkey())}`
-                  else if (e.MsgType == confFactory.MSGTYPE_LOCATION) // 48 位置 目前尚未实现
+                      content = `https://${location.host}${confFactory.API_webwxgetmsgimg}?MsgID=${e.MsgId}&skey=${encodeURIComponent(accountFactory.getSkey())}`
+                      media = '动画表情'
+                  } else if (e.MsgType == confFactory.MSGTYPE_LOCATION) // 48 位置 目前尚未实现
                       content = '[位置]'
                   else if (e.MsgType == confFactory.MSGTYPE_APP) { // 49
                       if (e.AppMsgType === confFactory.APPMSGTYPE_ATTACH)
@@ -605,9 +624,10 @@ class Injector {
                           content = '[App] ' + $('appmsg>title', doms).text() + ' ' + $('appmsg>url', doms).text()
                       }
                   }
-                  else if (e.MsgType == confFactory.MSGTYPE_MICROVIDEO) // 62 小视频
-                      content = `[小视频] https://${location.host}${confFactory.API_webwxgetvideo}?MsgID=${e.MsgId}&skey=${encodeURIComponent(accountFactory.getSkey())}`
-                  else if (e.MsgType == confFactory.MSGTYPE_SYS) // 10000 系统，如：“您已添加了xxx，现在可以开始聊天了。”、“xx邀请了yy加入了群聊。”、“如需将文字消息的语言翻译成系统语言，可以长按消息后选择"翻译"”
+                  else if (e.MsgType == confFactory.MSGTYPE_MICROVIDEO) { // 62 小视频
+                      content = `https://${location.host}${confFactory.API_webwxgetvideo}?MsgID=${e.MsgId}&skey=${encodeURIComponent(accountFactory.getSkey())}`
+                      media = '小视频'
+                  } else if (e.MsgType == confFactory.MSGTYPE_SYS) // 10000 系统，如：“您已添加了xxx，现在可以开始聊天了。”、“xx邀请了yy加入了群聊。”、“如需将文字消息的语言翻译成系统语言，可以长按消息后选择"翻译"”
                       content = '[系统] ' + content
                   else if (e.MsgType == confFactory.MSGTYPE_RECALLED) // 10002 撤回
                       content = '[撤回了一条消息]'
@@ -618,6 +638,8 @@ class Injector {
                           from: sender.isBrandContact() ? 'BrandServ' : sender,
                           to: receiver,
                           text: content,
+                          media: media,
+                          cookie: media ? document.cookie : undefined,
                           time: e.CreateTime
                   })
                   // 发送成功(无异常)则标记为已读
