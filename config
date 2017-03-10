@@ -8,6 +8,8 @@ http-listen: [127.0.0.1, ::1]
 http-port: 9000
 # Specify http-root if injector.js is located elsewhere
 #http-root: /usr/share/wechatircd
+# Display media links as https://127.0.0.1:9000/media/$id
+#http-url: https://127.0.0.1:9000
 
 #ignore: [channel_name_regex0, channel_name_regex1]
 #ignore-topic: [group_name_regex0]

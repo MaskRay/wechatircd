@@ -91,6 +91,7 @@ Firefox
 - 回复12:34:56的消息：`!m @123456 multi\nline\nreply`
 - 回复朋友/群的倒数第二条消息(自己的消息不计数)：`@2 reply`
 - 粘贴检测。待发送消息延迟0.1秒发送，期间收到的所有行合并为一个多行消息发送
+- `--http-url https://127.0.0.1:9000`，如果希望图片音频等链接缩短为`https://127.0.0.1:9000/media/0`
 
 `!m `, `@3 `, `nick: `可以任意安排顺序。
 
@@ -170,6 +171,7 @@ Emoji在网页上呈现时为`<img class="emoji emoji1f604" text="_web" src="
   + `--logger-mask '/tmp/wechat/$channel/%Y-%m-%d.log'`，日志文件名格式
   + `--logger-time-format %H:%M`，日志单条消息的时间格式
 - `--paste-wait`，待发送消息延迟0.1秒发送，期间收到的所有行合并为一个多行消息发送
+- `--special-channel-prefix`，选项：`&`, `!`, `#`, `##`，SpecialChannel的前缀。[Quassel](quassel-irc.org)似乎不支持channel前缀`&`，指定`--special-channel-prefix '##'`让Quassel高兴
 
 [wechatircd.service](wechatircd.service)是`/etc/systemd/system/wechatircd.service`的模板，修改其中的`User=` and `Group=`。
 

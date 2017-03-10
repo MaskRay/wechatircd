@@ -4,7 +4,7 @@ from configargparse import ArgParser, Namespace
 from collections import deque
 from datetime import datetime, timezone
 from itertools import chain
-import aiohttp.web, asyncio, inspect, json, logging.handlers, os, pprint, random, re, \
+import aiohttp.web, asyncio, base64, inspect, json, logging.handlers, os, pprint, random, re, \
     signal, socket, ssl, string, sys, time, traceback, uuid, weakref
 
 logger = logging.getLogger('wechatircd')
@@ -48,6 +48,9 @@ class Web(object):
         global web
         web = self
         self.tls = tls
+        self.id2media = {}
+        self.download_seq = 0
+        self.seq2download = {}
         self.id2message = {}
         self.recent_messages = deque()
         self.ws = weakref.WeakSet()
@@ -76,6 +79,35 @@ class Web(object):
             return aiohttp.web.Response(status=404, text='Not Found. Wrong --http-root ?')
         except KeyError:
             return aiohttp.web.Response(status=400, text='Missing Host:')
+
+    async def handle_media(self, request):
+        id = re.sub(r'\..*', '', request.match_info.get('id'))
+        if id not in self.id2media:
+            return aiohttp.web.Response(status=404, text='Not Found')
+        try:
+            seq = self.download_seq
+            self.download_seq += 1
+            event = asyncio.Event()
+            self.seq2download[seq] = [event, None]
+            self.send_command({'command': 'download', 'seq': seq, 'url': self.id2media[id]})
+
+            async def wake():
+                await asyncio.sleep(30)
+                if seq in self.seq2download:
+                    self.seq2download[seq][0].set()
+
+            server.loop.create_task(wake())
+            await event.wait()
+
+            res = self.seq2download[seq][1]
+            del self.seq2download[seq]
+            if res is None:
+                return aiohttp.web.Response(status=504, text='I used to live in 504A')
+            if isinstance(res, Exception):
+                return aiohttp.web.Response(status=500, text=res.args[0])
+            return aiohttp.web.Response(body=res[1], headers={'Content-Type': res[0]})
+        except Exception as ex:
+            return aiohttp.web.Response(status=500, text=str(ex))
 
     async def handle_web_socket(self, request):
         ws = aiohttp.web.WebSocketResponse()
@@ -113,6 +145,7 @@ class Web(object):
         self.app.router.add_route('GET', '/', self.handle_index)
         self.app.router.add_route('GET', '/index.js', self.handle_index_js)
         self.app.router.add_route('GET', '/injector.js', self.handle_injector_js)
+        self.app.router.add_route('GET', '/media/{id}', self.handle_media)
         self.app.router.add_route('GET', '/ws', self.handle_web_socket)
         self.handler = self.app.make_handler()
         self.srv = []
@@ -663,6 +696,22 @@ class SpecialCommands:
             server.username2special_room[username].on_delete()
 
     @staticmethod
+    def download_ack(data):
+        seq = data['seq']
+        if seq in web.seq2download:
+            download = web.seq2download[seq]
+            download[1] = (data['type'], base64.b64decode(data['body']))
+            download[0].set()
+
+    @staticmethod
+    def download_nak(data):
+        seq = data['seq']
+        if seq in web.seq2download:
+            download = web.seq2download[seq]
+            download[1] = Exception(data['error'])
+            download[0].set()
+
+    @staticmethod
     def message(data):
         if data['id'] in web.id2message:
             return
@@ -680,7 +729,22 @@ class SpecialCommands:
         data['to'] = to.username
         web.append_history(data)
 
-        for line in data['text'].splitlines():
+        if data.get('media'):
+            media_id = str(len(web.id2media))
+            if options.http_url:
+                web.id2media[media_id] = data['text']
+                if data['media'] in ('图片', '动画表情'):
+                    media_id += '.jpg'
+                elif data['media'] == '语音':
+                    media_id += '.mp3'
+                elif data['media'] in ('视频', '小视频'):
+                    media_id += '.mp4'
+                text = '[{}] {}/media/{}'.format(data['media'], options.http_url, media_id)
+            else:
+                text = '[{}] {}'.format(data['media'], data['text'])
+        else:
+            text = data['text']
+        for line in text.splitlines():
             if to == server or sender == server:
                 client = server.preferred_client()
                 if client:
@@ -1109,8 +1173,8 @@ class SpecialChannel(Channel):
             return
         self.topic = record['Nick']
         old_name = getattr(self, 'name', None)
-        base = '&' + irc_escape(self.topic)
-        if base == '&':
+        base = options.special_channel_prefix + irc_escape(self.topic)
+        if base == options.special_channel_prefix:
             base += '.'.join(member.nick for member in self.members)[:20]
         suffix = ''
         while 1:
@@ -1870,6 +1934,8 @@ def main():
                     help='HTTP/WebSocket listen addresses (overriding --listen)')
     ap.add_argument('--http-port', type=int, default=9000, help='HTTP/WebSocket listen port, default: 9000')
     ap.add_argument('--http-root', default=os.path.dirname(__file__), help='HTTP root directory (serving injector.js)')
+    ap.add_argument('--http-url',
+                     help='If specified, display media links as http://localhost:9000/media/$id ; if not, `https://wx.qq.com/cgi-bin/...`')
     ap.add_argument('-i', '--ignore', nargs='*',
                     help='list of ignored regex, do not auto join to a '+im_name+' chatroom whose channel name(generated from the Group Name) matches')
     ap.add_argument('--ignore-brand', action='store_true', help='ignore messages from Subscription Accounts')
@@ -1893,6 +1959,7 @@ def main():
     ap.add_argument('--logger-time-format', default='%H:%M', help='WeeChat logger.file.time_format')
     ap.add_argument('--paste-wait', type=float, default=0.1, help='lines will be hold for up to $paste_wait seconds before sending, lines in this interval will be packed to a multiline message')
     ap.add_argument('-q', '--quiet', action='store_const', const=logging.WARN, dest='loglevel')
+    ap.add_argument('--special-channel-prefix', choices=('&', '!', '#', '##'), default='&', help='prefix for SpecialChannel')
     ap.add_argument('-v', '--verbose', action='store_const', const=logging.DEBUG, dest='loglevel')
     global options
     options = ap.parse_args()
