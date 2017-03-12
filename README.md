@@ -39,7 +39,7 @@ set irc.server.wechat.password yourpassword
 
 - python >= 3.5
 - `pip install -r requirements.txt`
-- Generate a self-signed private key/certificate pair with `openssl req -newkey rsa:2048 -nodes -keyout key.pem -x509 -out cert.pem -subj '/CN=127.0.0.1' -dates 9999`.
+- Generate a self-signed private key/certificate pair with `openssl req -newkey rsa:2048 -nodes -keyout key.pem -x509 -out cert.pem -subj '/CN=127.0.0.1' -days 9999`.
 - Import `cert.pem` to the browser.
 - `./wechatircd.py --http-cert cert.pem --http-key key.pem`
 
