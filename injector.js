@@ -67,21 +67,6 @@ class CtrlServer {
           this.send({command: 'add_friend_nak', user: data.user})
         })
         break
-      case 'download':
-        fetch(data['url'], {credentials: 'include'}).then(res => {
-          if (! res.ok)
-            throw Error(res.statusText)
-          return res.blob()
-        }).then(blob => {
-          let reader = new FileReader
-          reader.onload = () => {
-            this.send({command: 'download_ack', seq: data['seq'],
-              body: reader.result === 'data:' ? '' : reader.result.replace(/.*?,/, ''),
-              type: blob.type})
-          }
-          reader.readAsDataURL(blob)
-        }).catch(err => this.send({command: 'download_nak', seq: data['seq'], error: err.message}))
-        break
       case 'logout':
         angular.element($('.panel')[0]).scope().toggleSystemMenu()
         $('#mmpop_system_menu a[title="Log Out"]').click()

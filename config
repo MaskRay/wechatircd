@@ -34,3 +34,6 @@ join: new
 #logger-ignore:
 #logger-mask: /tmp/wechatircd/$channel/%Y-%m-%d.log
 #logger-time-format: %H:%M
+
+# SASL PLAIN password (as an alternative to --irc-password)
+#sasl-password:

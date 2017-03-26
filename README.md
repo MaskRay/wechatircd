@@ -28,7 +28,7 @@ Discuss wechatircd by joining #wechatircd on freenode, or the [user group on Tel
 
 `wechatircd.py` (the server) will listen on 127.0.0.1:6667 (IRC) and 127.0.0.1:9000 (HTTPS + WebSocket over TLS).
 
-If you run the server on another machine, it is recommended to set up IRC over TLS and an IRC connection password with a few more options: `--irc-cert /path/to/irc.key --irc-key /path/to/irc.cert --irc-password yourpassword`. You can reuse the HTTPS certificate+key. If you use WeeChat and find it difficult to set up a valid certificate (gnutls checks the hostname), type the following lines in WeeChat:
+If you run the server on another machine, it is recommended to set up IRC over TLS and an IRC connection password with a few more options: `--irc-cert /path/to/irc.key --irc-key /path/to/irc.cert --irc-password yourpassword`. As an alternative to the IRC connection password, you may specify `--sasl-password yourpassword` and authenticate with SASL PLAIN. You can reuse the HTTPS certificate+key. If you use WeeChat and find it difficult to set up a valid certificate (gnutls checks the hostname), type the following lines in WeeChat:
 ```
 set irc.server.wechat.ssl on
 set irc.server.wechat.ssl_verify off
@@ -172,6 +172,7 @@ Emojis are rendered as `<img class="emoji emoji1f604" text="_web" src="/zh_CN
   + `--logger-mask '/tmp/wechat/$channel/%Y-%m-%d.log'`, format of log filenames
   + `--logger-time-format %H:%M`, time format of entries of server side log
 - `--paste-wait 0.1`, lines will be hold for up to 0.1 seconds before sending, lines in this interval will be packed to a multiline message
+- `--sasl-password pass`, set the SASL password to `pass`.
 - `--special-channel-prefix`, choices: `&`, `!`, `#`, `##`, prefix for SpecialChannel. [Quassel](quassel-irc.org) does not seem to support channels with prefixes `&`, `--special-channel-prefix '##'` to make Quassel happy
 
 See [wechatircd.service](wechatircd.service) for a template of `/etc/systemd/system/wechatircd.service`.

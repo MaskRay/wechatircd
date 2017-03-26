@@ -9,7 +9,7 @@ import aiohttp.web, async_timeout, asyncio, base64, inspect, json, logging.handl
 
 logger = logging.getLogger('wechatircd')
 im_name = 'WeChat'
-capabilities = set(['draft/message-tags', 'echo-message', 'multi-prefix', 'server-time'])  # http://ircv3.net/irc/
+capabilities = set(['draft/message-tags', 'echo-message', 'multi-prefix', 'sasl', 'server-time'])  # http://ircv3.net/irc/
 options = None
 server = None
 web = None
@@ -87,7 +87,7 @@ class Web(object):
             with async_timeout.timeout(30, loop=server.loop):
                 async with aiohttp.ClientSession() as session:
                     async with session.get(media['url'], headers={'Cookie': media['cookie']}) as resp:
-                        response = aiohttp.web.StreamResponse(status=resp.status, reason=resp.reason, headers={'Content-Type': resp.headers['content-type']})
+                        response = aiohttp.web.StreamResponse(status=resp.status, reason=resp.reason, headers={'Content-Type': resp.headers.get('content-type', 'application/octet-stream')})
                         await response.prepare(request)
                         while True:
                             chunk = await resp.content.readany()
@@ -254,7 +254,7 @@ def irc_escape(s):
 
 
 def irc_escape_nick(s):
-    return re.sub('^[&#!+]*', '', irc_escape(s))
+    return re.sub('^[&#!+:]*', '', irc_escape(s))
 
 
 def process_text(to, text):
@@ -372,8 +372,42 @@ def irc_privmsg(client, command, to, text):
 
 ### Commands
 
-class UnregisteredCommands(object):
+cmd_use_case = {}
+
+
+def registered(v):
+    def wrapped(fn):
+        cmd_use_case[fn.__name__] = v
+        return fn
+    return wrapped
+
+
+class Command:
     @staticmethod
+    @registered(3)
+    def authenticate(client, arg):
+        if arg.upper() == 'PLAIN':
+            client.write('AUTHENTICATE +')
+            return
+        if not (client.nick and client.user):
+            return
+        try:
+            if base64.b64decode(arg).split(b'\0')[2].decode() == options.sasl_password:
+                client.authenticated = True
+                client.reply('900 {} {} {} :You are now logged in as {}', client.nick, client.user, client.nick, client.nick)
+                client.reply('903 {} :SASL authentication successful', client.nick)
+                client.register()
+            else:
+                client.reply('904 {} :SASL authentication failed', client.nick)
+        except Exception as ex:
+            client.reply('904 {} :SASL authentication failed', client.nick)
+
+    @staticmethod
+    def away(client):
+        pass
+
+    @staticmethod
+    @registered(3)
     def cap(client, *args):
         if not args: return
         comm = args[0].lower()
@@ -382,45 +416,14 @@ class UnregisteredCommands(object):
         elif comm == 'ls':
             client.reply('CAP * LS :{}', ' '.join(capabilities))
         elif comm == 'req':
-            client.capabilities = capabilities & set(args[1].split())
+            enabled, disabled = set(), set()
+            for name in args[1].split():
+                if name.startswith('-'):
+                    disabled.add(name[1:])
+                else:
+                    enabled.add(name)
+            client.capabilities = (capabilities & enabled) - disabled
             client.reply('CAP * ACK :{}', ' '.join(client.capabilities))
-
-    @staticmethod
-    def nick(client, *args):
-        if len(options.irc_password) and not client.authenticated:
-            client.err_passwdmismatch('NICK')
-            return
-        if not args:
-            client.err_nonicknamegiven()
-            return
-        server.change_nick(client, args[0])
-
-    @staticmethod
-    def pass_(client, password):
-        if len(options.irc_password) and password == options.irc_password:
-            client.authenticated = True
-
-    @staticmethod
-    def quit(client):
-        client.disconnect('Client quit')
-
-    @staticmethod
-    def user(client, user, mode, _, realname):
-        if len(options.irc_password) and not client.authenticated:
-            client.err_passwdmismatch('USER')
-            return
-        client.user = user
-        client.realname = realname
-
-
-class RegisteredCommands:
-    @staticmethod
-    def away(client):
-        pass
-
-    @staticmethod
-    def cap(client, *args):
-        UnregisteredCommands.cap(client, *args)
 
     @staticmethod
     def info(client):
@@ -539,7 +542,11 @@ class RegisteredCommands:
         server.get_channel(target).on_names(client)
 
     @staticmethod
+    @registered(3)
     def nick(client, *args):
+        if len(options.irc_password) and not client.authenticated:
+            client.err_passwdmismatch('NICK')
+            return
         if not args:
             client.err_nonicknamegiven()
             return
@@ -547,7 +554,7 @@ class RegisteredCommands:
 
     @staticmethod
     def notice(client, *args):
-        RegisteredCommands.notice_or_privmsg(client, 'NOTICE', *args)
+        Command.notice_or_privmsg(client, 'NOTICE', *args)
 
     @staticmethod
     def part(client, arg, *args):
@@ -559,6 +566,14 @@ class RegisteredCommands:
                 client.err_notonchannel(channelname)
 
     @staticmethod
+    @registered(1)
+    def pass_(client, password):
+        if len(options.irc_password) and password == options.irc_password:
+            client.authenticated = True
+            client.register()
+
+    @staticmethod
+    @registered(3)
     def ping(client, *args):
         if not args:
             client.err_noorigin()
@@ -566,12 +581,13 @@ class RegisteredCommands:
         client.reply('PONG {} :{}', server.name, args[0])
 
     @staticmethod
+    @registered(3)
     def pong(client, *args):
         pass
 
     @staticmethod
     def privmsg(client, *args):
-        RegisteredCommands.notice_or_privmsg(client, 'PRIVMSG', *args)
+        Command.notice_or_privmsg(client, 'PRIVMSG', *args)
 
     @staticmethod
     def quit(client, *args):
@@ -659,6 +675,16 @@ class RegisteredCommands:
                 client, command, msg)
         elif command == 'PRIVMSG':
             client.err_nosuchnick(target)
+
+    @staticmethod
+    @registered(1)
+    def user(client, user, mode, _, realname):
+        if len(options.irc_password) and not client.authenticated:
+            client.err_passwdmismatch('USER')
+            return
+        client.user = user
+        client.realname = realname
+        client.register()
 
 
 class SpecialCommands:
@@ -1355,18 +1381,21 @@ class Client:
         if quitmsg:
             self.write('ERROR :{}'.format(quitmsg))
             self.message_related(False, ':{} QUIT :{}', self.prefix, quitmsg)
-        if self.nick is None: return
-        info('Disconnected from %s', self.prefix)
+        if self.nick is not None:
+            info('Disconnected from %s', self.prefix)
         try:
             self.writer.write_eof()
             self.writer.close()
         except:
             pass
+        if self.nick is None:
+            return
         channels = list(self.channels.values())
         for channel in channels:
             channel.on_part(self, None)
         server.remove_nick(self.nick)
         self.nick = None
+        server.clients.discard(self)
 
     def reply(self, msg, *args):
         '''Respond to the client's request'''
@@ -1374,7 +1403,7 @@ class Client:
 
     def write(self, msg):
         try:
-            self.writer.write(msg.encode()+b'\n')
+            self.writer.write(msg.encode()+b'\r\n')
         except:
             pass
 
@@ -1474,33 +1503,38 @@ class Client:
         for client in clients:
             client.write(line)
 
+    def register(self):
+        if self.registered:
+            return
+        if self.user and self.nick and (not (options.irc_password or options.sasl_password) or self.authenticated):
+            self.registered = True
+            info('%s registered', self.prefix)
+            self.reply('001 {} :Hi, welcome to IRC', self.nick)
+            self.reply('002 {} :Your host is {}', self.nick, server.name)
+            self.reply('005 {} PREFIX=(ohv)@%+ CHANTYPES=!#&+ CHANMODES=,,,m SAFELIST :are supported by this server', self.nick)
+            Command.lusers(self)
+            Command.motd(self)
+
+            Command.join(self, StatusChannel.instance.name)
+            StatusChannel.instance.respond(self, 'Visit web.telegram.org and then you will see your friend list in this channel')
+
     def handle_command(self, command, args):
-        cls = RegisteredCommands if self.registered else UnregisteredCommands
-        ret = False
         cmd = irc_lower(command)
         if cmd == 'pass':
             cmd = cmd+'_'
-        if type(cls.__dict__.get(cmd)) != staticmethod:
+        if type(Command.__dict__.get(cmd)) != staticmethod:
             self.err_unknowncommand(command)
-        else:
-            fn = getattr(cls, cmd)
-            try:
-                ba = inspect.signature(fn).bind(self, *args)
-            except TypeError:
-                self.err_needmoreparams(command)
-            else:
-                fn(*ba.args)
-                if not self.registered and self.user and self.nick:
-                    info('%s registered', self.prefix)
-                    self.reply('001 {} :Hi, welcome to IRC', self.nick)
-                    self.reply('002 {} :Your host is {}', self.nick, server.name)
-                    RegisteredCommands.lusers(self)
-                    RegisteredCommands.motd(self)
-                    self.registered = True
-
-                    status_channel = StatusChannel.instance
-                    RegisteredCommands.join(self, status_channel.name)
-                    status_channel.respond(self, 'Visit wx.qq.com and then you will see your friend list in this channel')
+            return
+        fn = getattr(Command, cmd)
+        if not (cmd_use_case.get(cmd, 2) & (2 if self.registered else 1)):
+            self.err_unknowncommand(command)
+            return
+        try:
+            ba = inspect.signature(fn).bind(self, *args)
+        except TypeError:
+            self.err_needmoreparams(command)
+            return
+        fn(*ba.args)
 
     async def handle_irc(self):
         sent_ping = False
@@ -1716,8 +1750,8 @@ class SpecialUser:
 
 class Server:
     valid_nickname = re.compile(r"^[][\`_^{|}A-Za-z][][\`_^{|}A-Za-z0-9-]{0,50}$")
-    # initial character `+` is reserved for special channels
-    # initial character `&` is reserved for special chatrooms
+    # initial character `+` is reserved for StatusChannel
+    # initial character `&` is reserved for SpecialChannel
     valid_channelname = re.compile(r"^[#!][^\x00\x07\x0a\x0d ,:]{0,50}$")
 
     def __init__(self):
@@ -1929,6 +1963,7 @@ def main():
     ap.add_argument('--logger-time-format', default='%H:%M', help='WeeChat logger.file.time_format')
     ap.add_argument('--paste-wait', type=float, default=0.1, help='lines will be hold for up to $paste_wait seconds before sending, lines in this interval will be packed to a multiline message')
     ap.add_argument('-q', '--quiet', action='store_const', const=logging.WARN, dest='loglevel')
+    ap.add_argument('--sasl-password', default='', help='Set the SASL password')
     ap.add_argument('--special-channel-prefix', choices=('&', '!', '#', '##'), default='&', help='prefix for SpecialChannel')
     ap.add_argument('-v', '--verbose', action='store_const', const=logging.DEBUG, dest='loglevel')
     global options
