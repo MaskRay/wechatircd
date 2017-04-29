@@ -20,8 +20,8 @@ IRC client --- wechatircd.py --------- browser         ----- wx.qq.com
 
 ### Arch Linux
 
-- `yaourt -S wechatircd-git`。会在`/etc/wechatircd/`下生成自签名证书。
-- 把`/etc/wechatircd/cert.pem`导入到浏览器(见下文)
+- `yaourt -S wechatircd-git`。会在`/etc/wechatircd/`下生成CA certificate/key和另一对CA签署的certificate/key。
+- 把CA证书`/etc/wechatircd/ca.cert.pem`导入到浏览器(见下文)
 - `systemctl start wechatircd`会运行`/usr/bin/wechatircd --http-cert /etc/wechatircd/cert.pem --http-key /etc/wechatircd/key.pem --http-root /usr/share/wechatircd`
 
 IRC服务器默认监听127.0.0.1:6667 (IRC)和127.0.0.1:9000 (HTTPS + WebSocket over TLS)。
@@ -30,24 +30,31 @@ IRC服务器默认监听127.0.0.1:6667 (IRC)和127.0.0.1:9000 (HTTPS + WebSocket
 
 可以把HTTPS私钥证书用作IRC over TLS私钥证书。使用WeeChat的话，如果觉得让WeeChat信任证书比较麻烦(gnutls会检查hostname)，可以用：
 ```
-set irc.server.wechat.ssl on
-set irc.server.wechat.ssl_verify off
-set irc.server.wechat.password yourpassword
+/set irc.server.wechat.ssl on
+/set irc.server.wechat.ssl_verify off
+/set irc.server.wechat.password yourpassword
 ```
 
 ### Not Arch Linux
 
 - python >= 3.5
 - `pip install -r requirements.txt`
-- `openssl req -newkey rsa:2048 -nodes -keyout key.pem -x509 -out cert.pem -subj '/CN=127.0.0.1' -days 9999`创建密钥与证书。
-- 把`cert.pem`导入浏览器，见下文
+- ```zsh
+  openssl req -x509 -newkey rsa:2048 -nodes -keyout ca.key.pem -out ca.cert.pem -days 9999 -subj '/CN=127.0.0.1'
+  openssl req -new -newkey rsa:2048 -nodes -keyout key.pem -subj '/CN=127.0.0.1' |
+    openssl x509 -req -out cert.pem -CAkey ca.key.pem -CA ca.cert.pem -set_serial 2 -days 9999 -extfile <(
+      printf "subjectAltName = IP:127.0.0.1, DNS:localhost")
+  ```
+- 把CA证书`ca.cert.pem`导入浏览器，见下文
 - `./wechatircd.py --http-cert cert.pem --http-key key.pem`
 
-### Userscript和自签名证书
+用于服务`injector.js`和`injector.user.js`的IP或域名必须匹配`subjectAlternativeName`。Chrome从版本58起不再支持用证书中的`commonName`匹配IP/域名，参见<https://developers.google.com/web/updates/2017/03/chrome-58-deprecations#remove_support_for_commonname_matching_in_certificates>。
+
+### Userscript和自签名CA证书
 
 Chrome/Chromium
 
-- 访问`chrome://settings/certificates`，导入`cert.pem`，在Authorities标签页选择该证书，Edit->Trust this certificate for identifying websites.
+- 访问`chrome://settings/certificates`，导入`ca.cert.pem`，在Authorities标签页选择该证书，Edit->Trust this certificate for identifying websites.
 - 安装Tampermonkey扩展，点击<https://github.com/MaskRay/wechatircd/raw/master/injector.user.js>安装userscript，效果是在<https://wx.qq.com>页面注入<https://127.0.0.1:9000/injector.js>。如果监听不同地址，需要修改`127.0.0.1:9000`
 
 Firefox

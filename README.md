@@ -22,32 +22,39 @@ Discuss wechatircd by joining #wechatircd on freenode, or the [user group on Tel
 
 ### Arch Linux
 
-- `yaourt -S wechatircd-git`. It will generate a self-signed key/certificate pair in `/etc/wechatircd/` (see below).
-- Import `/etc/wechatircd/cert.pem` to the browser (see below).
+- `yaourt -S wechatircd-git`. It will generate a self-signed CA key/certificate pair `/etc/wechatircd/ca.{cert,key}.pem` and a key/certificate pair `{cert,key}.pem` (see below).
+- Import the CA certificate `/etc/wechatircd/ca.cert.pem` to the browser (see below).
 - `systemctl start wechatircd`, which runs `/usr/bin/wechatircd --http-cert /etc/wechatircd/cert.pem --http-key /etc/wechatircd/key.pem --http-root /usr/share/wechatircd`. You may want to customize `/etc/systemd/system/wechatircd.service`.
 
 `wechatircd.py` (the server) will listen on 127.0.0.1:6667 (IRC) and 127.0.0.1:9000 (HTTPS + WebSocket over TLS).
 
 If you run the server on another machine, it is recommended to set up IRC over TLS and an IRC connection password with a few more options: `--irc-cert /path/to/irc.key --irc-key /path/to/irc.cert --irc-password yourpassword`. As an alternative to the IRC connection password, you may specify `--sasl-password yourpassword` and authenticate with SASL PLAIN. You can reuse the HTTPS certificate+key. If you use WeeChat and find it difficult to set up a valid certificate (gnutls checks the hostname), type the following lines in WeeChat:
 ```
-set irc.server.wechat.ssl on
-set irc.server.wechat.ssl_verify off
-set irc.server.wechat.password yourpassword
+/set irc.server.wechat.ssl on
+/set irc.server.wechat.ssl_verify off
+/set irc.server.wechat.password yourpassword
 ```
 
 ### Not Arch Linux
 
 - python >= 3.5
 - `pip install -r requirements.txt`
-- Generate a self-signed private key/certificate pair with `openssl req -newkey rsa:2048 -nodes -keyout key.pem -x509 -out cert.pem -subj '/CN=127.0.0.1' -days 9999`.
-- Import `cert.pem` to the browser.
+- ```zsh
+  openssl req -x509 -newkey rsa:2048 -nodes -keyout ca.key.pem -out ca.cert.pem -days 9999 -subj '/CN=127.0.0.1'
+  openssl req -new -newkey rsa:2048 -nodes -keyout key.pem -subj '/CN=127.0.0.1' |
+    openssl x509 -req -out cert.pem -CAkey ca.key.pem -CA ca.cert.pem -set_serial 2 -days 9999 -extfile <(
+      printf "subjectAltName = IP:127.0.0.1, DNS:localhost")
+  ```
+- Import the CA certificate `ca.cert.pem` to the browser.
 - `./wechatircd.py --http-cert cert.pem --http-key key.pem`
 
-## Userscript and self-signed certificate
+The IP address or the domain name used to serve `injector.js` and `injector.user.js` should match the `subjectAlternativeName` fields. Chrome has removed support for `commonName` matching in certificates since version 58. See <https://developers.google.com/web/updates/2017/03/chrome-58-deprecations#remove_support_for_commonname_matching_in_certificates> for detail.
+
+## Userscript and self-signed CA certificate
 
 Chrome/Chromium
 
-- Visit `chrome://settings/certificates`，import `cert.pem`，click the `Authorities` tab，select the `127.0.0.1` certificate, Edit->Trust this certificate for identifying websites.
+- Visit `chrome://settings/certificates`，import `ca.cert.pem`，click the `Authorities` tab，select the `127.0.0.1` certificate, Edit->Trust this certificate for identifying websites.
 - Install extension Tampermonkey, install <https://github.com/MaskRay/wechatircd/raw/master/injector.user.js>. It will inject <https://127.0.0.1:9000/injector.js> to <https://wx.qq.com>. You need to change `127.0.0.1:9000` if you want wechatircd to listen on another address.
 
 Firefox
