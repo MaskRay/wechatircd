@@ -103,7 +103,7 @@ class Web(object):
             return aiohttp.web.Response(status=500, text=str(ex))
 
     async def handle_web_socket(self, request):
-        ws = aiohttp.web.WebSocketResponse()
+        ws = aiohttp.web.WebSocketResponse(heartbeat=options.heartbeat)
         self.ws.add(ws)
         peername = request.transport.get_extra_info('peername')
         info('WebSocket client connected from %r', peername)
@@ -118,12 +118,6 @@ class Web(object):
                     break
                 except:
                     raise
-            elif msg.tp == aiohttp.web.MsgType.ping:
-                try:
-                    ws.pong()
-                except:
-                    info('WebSocket client ping')
-                    break
             elif msg.tp == aiohttp.web.MsgType.close:
                 info('WebSocket client close')
                 break
