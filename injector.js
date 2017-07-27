@@ -138,7 +138,9 @@ class CtrlServer {
               chatFactory.appendMessage(m)
               chatFactory.sendMessage(m)
             } finally {
-              chatFactory.setCurrentUserName(old)
+              if (old) {
+                chatFactory.setCurrentUserName(old)
+              }
             }
           } else
             this.send({command: 'send_file_message_nak',
@@ -174,7 +176,9 @@ class CtrlServer {
           console2.error(ex.stack)
         } finally {
           this.localID = null
-          chatFactory.setCurrentUserName(old)
+          if (old) {
+            chatFactory.setCurrentUserName(old)
+          }
         }
         break
       case 'add_member':
