@@ -87,7 +87,7 @@ class Web(object):
             with async_timeout.timeout(30, loop=server.loop):
                 async with aiohttp.ClientSession() as session:
                     async with session.get(media['url'], headers={'Cookie': media['cookie']}) as resp:
-                        response = aiohttp.web.StreamResponse(status=resp.status, reason=resp.reason, headers={'Content-Type': resp.headers.get('content-type', 'application/octet-stream')})
+                        response = await aiohttp.web.StreamResponse(status=resp.status, reason=resp.reason, headers={'Content-Type': resp.headers.get('content-type', 'application/octet-stream')})
                         await response.prepare(request)
                         while True:
                             chunk = await resp.content.readany()
@@ -109,7 +109,8 @@ class Web(object):
         info('WebSocket client connected from %r', peername)
         await ws.prepare(request)
         async for msg in ws:
-            if msg.tp == aiohttp.web.MsgType.text:
+            #if msg.tp == aiohttp.web.MsgType.text:
+            if msg.type == aiohttp.WSMsgType.TEXT:
                 try:
                     data = json.loads(msg.data)
                     server.on_websocket(data)
@@ -118,7 +119,8 @@ class Web(object):
                     break
                 except:
                     raise
-            elif msg.tp == aiohttp.web.MsgType.close:
+            #elif msg.tp == aiohttp.web.MsgType.close:
+            elif msg.type == aiohttp.WSMsgType.CLOSE:
                 info('WebSocket client close')
                 break
         info('WebSocket client disconnected from %r', peername)
@@ -161,72 +163,72 @@ class Web(object):
         self.recent_messages.append(data)
         self.id2message[data['id']] = data
 
-    def send_command(self, data):
+    async def send_command(self, data):
         for ws in web.ws:
             try:
-                ws.send_str(json.dumps(data))
+                await ws.send_str(json.dumps(data))
             except:
                 pass
             break
 
-    def logout(self):
-        self.send_command({'command': 'logout'})
+    async def logout(self):
+        await self.send_command({'command': 'logout'})
 
-    def reload(self):
-        self.send_command({'command': 'reload'})
+    async def reload(self):
+        await self.send_command({'command': 'reload'})
 
-    def send_file(self, receiver, filename, body):
-        self.send_command({
+    async def send_file(self, receiver, filename, body):
+        await self.send_command({
             'command': 'send_file',
             'receiver': receiver,
             'filename': filename,
             'body': body.decode('latin-1'),
         })
 
-    def send_text_message(self, client, receiver, msg):
-        self.send_command({
+    async def send_text_message(self, client, receiver, msg):
+        await self.send_command({
             'command': 'send_text_message',
             'client': client.nick,
             'receiver': receiver,
             'text': msg,
         })
 
-    def add_friend(self, username, message):
-        self.send_command({
+    async def add_friend(self, username, message):
+        await self.send_command({
             'command': 'add_friend',
             'user': username,
             'text': message,
         })
 
-    def add_member(self, roomname, username):
-        self.send_command({
+    async def add_member(self, roomname, username):
+        await self.send_command({
             'command': 'add_member',
             'room': roomname,
             'user': username,
         })
 
-    def del_member(self, roomname, username):
-        self.send_command({
+    async def del_member(self, roomname, username):
+        await self.send_command({
             'command': 'del_member',
             'room': roomname,
             'user': username,
         })
 
-    def mod_topic(self, roomname, topic):
-        self.send_command({
+    async def mod_topic(self, roomname, topic):
+        await self.send_command({
             'command': 'mod_topic',
             'room': roomname,
             'topic': topic,
         })
 
-    def reload_contact(self, who):
-        self.send_command({
+    async def reload_contact(self, who):
+        await self.send_command({
             'command': 'reload_contact',
             'name': who,
         })
 
-    def web_eval(self, expr):
-        self.send_command({
+    async def web_eval(self, expr):
+        await self.send_command({
             'command': 'eval',
             'expr': expr,
         })
@@ -348,14 +350,14 @@ def irc_privmsg(client, command, to, text):
     if command == 'PRIVMSG' and client.ctcp(to, text):
         return
 
-    def send():
-        web.send_text_message(client, to.username, to.privmsg_text)
+    async def send():
+        await web.send_text_message(client, to.username, to.privmsg_text)
         to.privmsg_text = ''
 
     async def wait(seq):
         await asyncio.sleep(options.paste_wait)
         if to.privmsg_seq == seq:
-            send()
+            await send()
 
     text = process_text(to, text)
     to.privmsg_seq = to.privmsg_seq+1
