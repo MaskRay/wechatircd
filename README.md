@@ -40,8 +40,8 @@ If you run the server on another machine, it is recommended to set up IRC over T
 - python >= 3.5
 - `pip install -r requirements.txt`
 - ```zsh
-  openssl req -x509 -newkey rsa:2048 -nodes -keyout ca.key.pem -out ca.cert.pem -days 9999 -subj '/CN=127.0.0.1'
-  openssl req -new -newkey rsa:2048 -nodes -keyout key.pem -subj '/CN=127.0.0.1' |
+  openssl req -x509 -newkey rsa:2048 -sha256 -nodes -keyout ca.key.pem -out ca.cert.pem -days 9999 -subj '/CN=127.0.0.1'
+  openssl req -new -newkey rsa:2048 -sha256 -nodes -keyout key.pem -subj '/CN=127.0.0.1' |
     openssl x509 -req -out cert.pem -CAkey ca.key.pem -CA ca.cert.pem -set_serial 2 -days 9999 -extfile <(
       printf "subjectAltName = IP:127.0.0.1, DNS:localhost")
   ```
