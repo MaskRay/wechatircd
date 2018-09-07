@@ -1504,7 +1504,7 @@ class Client:
             Command.motd(self)
 
             Command.join(self, StatusChannel.instance.name)
-            StatusChannel.instance.respond(self, 'Visit web.telegram.org and then you will see your friend list in this channel')
+            StatusChannel.instance.respond(self, 'Visit wx.qq.com and then you will see your friend list in this channel')
 
     def handle_command(self, command, args):
         cmd = irc_lower(command)
