@@ -138,7 +138,7 @@ WeeChat配置方式：
 
 - `MSGTYPE_TEXT`，文本或是视频/语音聊天请求，显示文本
 - `MSGTYPE_IMG`，图片，显示`[Image]`跟URL
-- `MSGTYPE_VOICE`，语音，显示`[Image]`跟URL
+- `MSGTYPE_VOICE`，语音，显示`[Voice]`跟URL
 - `MSGTYPE_VIDEO`，视频，显示`[Video]`跟URL
 - `MSGTYPE_MICROVIDEO`，微视频?，显示`[MicroVideo]`跟URL
 - `MSGTYPE_APP`，订阅号新文章、各种应用分享送红包、URL分享等属于此类，还有子分类`APPMSGTYPE_*`，显示`[App]`跟title跟URL
