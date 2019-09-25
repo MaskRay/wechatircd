@@ -343,20 +343,18 @@ class Injector {
   init() {
     if (Common.DEBUG)
       Injector.lock(window, 'console', window.console)
-    this.initAngularInjection()
+    //this.initAngularInjection()
     window.ctrlServer = new CtrlServer()
   }
 
-  initAngularInjection() {
+  run() {
     const self = this;
-    const angular = window.angular = {};
+    //const angular = window.angular = {};
 
     let angularBootstrapReal
-    Object.defineProperty(angular, 'bootstrap', {
-      set: (real) => (angularBootstrapReal = real),
-      get: () => angularBootstrapReal ? function (element, moduleNames) {
+    {
         const moduleName = 'webwxApp';
-        if (moduleNames.indexOf(moduleName) < 0) return;
+        //if (moduleNames.indexOf(moduleName) < 0) return;
         let constants = null;
         let $injector = angular.injector(['ng', 'Services'])
         $injector.invoke(['confFactory', (confFactory) => (constants = confFactory)]);
@@ -367,7 +365,6 @@ class Injector {
         },
         ])
 
-        let ret = angularBootstrapReal.apply(angular, arguments)
         let injector = angular.element(document).injector();
         window.accountFactory = injector.get('accountFactory')
         window.chatFactory = injector.get('chatFactory')
@@ -413,10 +410,7 @@ class Injector {
             return Injector.contactFactoryDeleteContact.call(contactFactory, contactFactoryDeleteContactReal).apply(null, arguments)
           }
         })
-
-        return ret
-      } : angularBootstrapReal
-    })
+    }
   }
 
   transformResponse(value, constants) {
@@ -670,4 +664,5 @@ class Injector {
   }
 }
 
-new Injector().init()
+var injector = new Injector()
+injector.init()

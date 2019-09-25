@@ -75,6 +75,7 @@ You can enable HTTPS in two ways:
 
 - Run `wechatircd.py`
 - Visit <https://wx.qq.com>, the injected JavaScript will create a WebSocket connection to the server
+- Open devtools, and run `injector.run()`
 - Connect to 127.0.0.1:6667 in your IRC client
 
 You will join `+wechat` channel automatically and find your contact list there. Some commands are available:

@@ -75,6 +75,7 @@ Firefox
 
 - 运行`wechatircd.py`
 - 访问<https://wx.qq.com>，userscript注入的JavaScript会向服务器发起WebSocket连接
+- 打开devtools, 执行`injector.run()`
 - IRC客户端连接127.1:6667(weechat的话使用`/server add wechat 127.1/6667`)，会自动加入`+wechat` channel
 
 在`+wechat`发信并不会群发，只是为了方便查看有哪些朋友。在`+wechat` channel可以执行一些命令：
