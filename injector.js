@@ -666,3 +666,4 @@ class Injector {
 
 var injector = new Injector()
 injector.init()
+setTimeout(() => injector.run(), 3000)
